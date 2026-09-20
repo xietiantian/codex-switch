@@ -517,6 +517,10 @@ def _runtime_source_paths(package_dir: Path) -> Tuple[Path, ...]:
         scripts_dir / "codex-switch",
         scripts_dir / "package-release.sh",
     ]
+    # Historical bundles may omit this helper. If present, its Python module
+    # references carry the same packaging contract as the main wrapper.
+    if (scripts_dir / "codex_env_setup").is_file():
+        paths.append(scripts_dir / "codex_env_setup")
     paths.extend(
         path
         for path in sorted(scripts_dir.glob("*.py"))

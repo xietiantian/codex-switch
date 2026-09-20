@@ -4,7 +4,7 @@ project_mode: brownfield
 current_stage: external_effects
 
 current_change:
-  id: independent-app-cli-profiles
+  id: support-standalone-installer-runtime
   status: external_effects
 
 standing_milestone:
@@ -18,10 +18,10 @@ standing_milestone:
   review_digest: none
 
 authority_gate:
-  key: sha256:5cc1e103af3dedb42b09385faab4acb2cfd469b00d88c7d365941e99552e7f06
+  key: none
   status: resolved
-  resolution_digest: sha256:2d21684fe2c56d7188535edb912e7e0ded75611044678b5fe6a0938df6c35f69
-  evidence_digest: sha256:983ff8553521674b9c58c19f37821d4d0b0084a138dd15ca8a803b862634d2c9
+  resolution_digest: none
+  evidence_digest: none
   next_question: none
   missing_authority: []
 
@@ -34,20 +34,20 @@ gates:
   verification_passed: true
   state_updated: true
   archive_allowed: false
-  release_allowed: true
+  release_allowed: false
 
 implementation_readiness:
   required: false
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-08-14-public-profile-error-v0.1.15-submit-authorized
-  last_checkpoint_file: .planning/devflow/verification/independent-app-cli-profiles.md
+  last_checkpoint_id: 2026-09-20-standalone-runtime-repair
+  last_checkpoint_file: .planning/devflow/verification/support-standalone-installer-runtime.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-08-14T12:24:59+08:00
+  compact_updated_at: 2026-09-20T17:07:51+08:00
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -69,24 +69,30 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: 019f8f8f-e64c-7093-af73-2c0247cf2891
+  id: support-standalone-installer-runtime
   required: true
   status: satisfied
-  reason: the existing repository Goal Contract covers the confirmed task 13 cache-lifecycle decision
+  reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
 context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: authorize_public_profile_error_and_publish_v0.1.15
+  last_decision: repair_standalone_installer_compatibility
   last_goal_status: aligned
-  goal_summary: Separate backend-managed official source identity from internal target identity and prove the managed CLI starts successfully.
+  goal_summary: Preserve complete standalone runtimes through isolated installation and transactional activation.
 ---
 
 # Workflow State
 
-## Current Status
+## Active Repair Status
+
+The standalone installer compatibility repair and isolated verification pass. Its
+OpenSpec tasks and verification record are authoritative for this branch.
+No live installation or release is authorized; isolated tests and a PR are.
+
+## Historical Status
 
 Tasks 16.18-16.20 are complete. Commit `7b797fe` reached `origin/main`, but
 Auto Release run `31695733067` exhausted the bounded Profile/Wrapper retry
@@ -100,8 +106,5 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Stage only the verified public-error-annotation, OpenSpec, ledger, state,
-verification, and authority write set. Fast-forward push once to
-`origin/main`, inspect the new public Check Run annotations, then either repair
-the exposed assertion or verify the published `v0.1.15` tag, Release, and
-canonical three assets while preserving `v0.1.14=19a2433`.
+Commit the verified generic public diff and submit the approved pull request. Historical release authority
+above does not authorize new release publication or a direct push to main.

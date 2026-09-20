@@ -27,6 +27,7 @@ SKIP_SOURCE_CHECK=0
 SKIP_PROXY=0
 DRY_RUN=0
 PYTHON_BIN="${CODEX_SWITCH_PYTHON:-python3}"
+INTERNAL_CANDIDATE_LAYOUT="legacy"
 
 usage() {
   cat <<'USAGE'
@@ -409,6 +410,7 @@ run_trusted_internal_installer() {
   local install_ak="$1"
   local status installer_root installer_identity cleanup_status
   local installer_signal_status installer_pipeline_pid
+  local runtime_args=()
 
   status=0
   installer_root=""
@@ -497,6 +499,7 @@ run_trusted_internal_installer() {
     curl -fsSL "$INSTALLER_URL" |
       HOME="$installer_root/home" \
       CODEX_HOME="$installer_root/codex-home" \
+      CODEX_NON_INTERACTIVE=1 \
       PATH="$INSTALL_DIR:$PATH" \
       CODEX_INSTALL_DIR="$INSTALL_DIR" \
       CODEX_INSTALL_MODEL="$INSTALL_MODEL" \
@@ -520,6 +523,29 @@ run_trusted_internal_installer() {
     status="$installer_signal_status"
   fi
 
+  if [[ "$status" == 0 && -L "$INSTALL_DIR/codex" ]]; then
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1; then
+      runtime_args+=(--codesign)
+    fi
+    "$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_internal_runtime.py" \
+      --candidate "$INSTALL_DIR/codex" --scratch "$installer_root" \
+      --version "$INSTALL_VERSION" "${runtime_args[@]}" >/dev/null &
+    installer_pipeline_pid=$!
+    if [[ "$installer_signal_status" != 0 ]]; then
+      kill -TERM "$installer_pipeline_pid" 2>/dev/null || true
+    fi
+    if wait "$installer_pipeline_pid"; then
+      INTERNAL_CANDIDATE_LAYOUT="standalone"
+    else
+      status=$?
+    fi
+    if [[ "$installer_signal_status" != 0 ]]; then
+      kill -TERM "$installer_pipeline_pid" 2>/dev/null || true
+      wait "$installer_pipeline_pid" 2>/dev/null || true
+    fi
+    installer_pipeline_pid=""
+  fi
+
   cleanup_status=0
   cleanup_installer_state || cleanup_status=$?
   if [[ "$cleanup_status" != 0 ]]; then
@@ -529,6 +555,9 @@ run_trusted_internal_installer() {
     fi
   fi
   installer_root=""
+  if [[ "$installer_signal_status" != 0 ]]; then
+    status="$installer_signal_status"
+  fi
   trap - EXIT HUP INT TERM
   return "$status"
 }
@@ -742,7 +771,7 @@ update_internal() {
   validate_staged_candidate_executable "$install_bin"
 
   codesign_status=0
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1 && [[ -x "$install_bin" ]]; then
+  if [[ "$INTERNAL_CANDIDATE_LAYOUT" == "legacy" && "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1 && [[ -x "$install_bin" ]]; then
     if codesign --force --sign - "$install_bin" >/dev/null; then
       true
     else

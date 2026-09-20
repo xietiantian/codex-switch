@@ -300,6 +300,20 @@ nor `Restart required`. Durable success retires the backup first and then prints
 one restart notice. `update-internal --dry-run` performs none of these
 mutations.
 
+Staged installers run with `CODEX_NON_INTERACTIVE=1`, so supported installers
+skip uninstall and launch prompts. Standalone packages are preserved under
+`.codex-internal-runtimes/<digest>` beside the bound command before the private
+installer home is removed. Only runtime assets are retained; installer config,
+credentials, and shell-profile changes remain disposable.
+
+The existing `codex` path becomes a regular launcher that verifies the complete
+package and executes its native command with the caller's arguments, `HOME`,
+and `CODEX_HOME`. It uses the Python interpreter selected during preparation
+and reads package files for integrity verification on each invocation. Native
+executables are signed before their hashes are recorded. Older direct-file
+installers retain their existing behavior. Generations are retained for safe
+rollback; automatic runtime garbage collection is not part of this update.
+
 Source tests, a successful update, or a successful rebind do not satisfy the
 live Desktop acceptance contract. Fully quitting and reopening ChatGPT,
 creating a real provider-backed typed `explorer` Subagent task, and attesting

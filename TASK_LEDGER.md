@@ -1,5 +1,15 @@
 # Task Ledger
 
+## Active Repair: Standalone Runtime Installation
+
+- Approved: generic package-preserving installer repair, isolated testing, and PR.
+- Execution source: `openspec/changes/support-standalone-installer-runtime/tasks.md`.
+- Scope: installer adapter, runtime validation/launcher, tests, public docs.
+- Non-goals: installed workstation changes, release publication, unrelated cleanup.
+- Evidence: `.planning/devflow/verification/support-standalone-installer-runtime.md`.
+- Continuation: auto-until-terminal through the authorized pull request.
+- Historical goals below are retained as prior records, not current authority.
+
 ## Goal Contract
 
 - goal_id: `019f8f8f-e64c-7093-af73-2c0247cf2891`

@@ -543,6 +543,22 @@ class CodexUpdateReleaseTests(unittest.TestCase):
 
         self.assertEqual(sha256(first.archive), sha256(second.archive))
 
+    def test_env_setup_runtime_dependency_is_validated_in_release_package(self) -> None:
+        helper = "codex_switch_internal_runtime.py"
+        (self.repo / "scripts/codex_env_setup").write_text(
+            '#!/bin/sh\npython3 "$SCRIPT_DIR/' + helper + '"\n'
+        )
+        module = load_bundle_module()
+        with self.assertRaises(module.BundleError) as caught:
+            module.build_release_bundle(self.repo, self.output)
+        self.assertIn("missing payload module", str(caught.exception))
+        shutil.copy2(REPO_ROOT / "scripts" / helper, self.repo / "scripts" / helper)
+        receipt = module.build_release_bundle(self.repo, self.root / "complete-output")
+        self.assertEqual(
+            (REPO_ROOT / "scripts" / helper).read_bytes(),
+            (receipt.package_dir / "scripts" / helper).read_bytes(),
+        )
+
     def test_strict_bundle_protects_nested_manifest_named_payload(self) -> None:
         nested_manifest = self.repo / "scripts" / MANIFEST_NAME
         nested_manifest.write_text('{"payload": true}\n')
@@ -7780,6 +7796,438 @@ class CodexInstallerRunnerAdapterTests(unittest.TestCase):
             self._read_self_update_command_log(command_log),
         )
         self.assertNotIn("sync failed; continuing", result.stderr)
+
+
+class CodexStandaloneRuntimeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Register the fixture lifetime before any installer process is started.
+        self.fixture = CodexStagedInternalUpdateTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.tearDown)
+        self.f = self.fixture
+
+    def write_installer(self, mutation: str = "") -> None:
+        runtime = '''#!/usr/bin/env python3
+import json, os, pathlib, subprocess, sys
+root = pathlib.Path(__file__).resolve().parent.parent
+assert subprocess.check_output([str(root / "bin/codex-code-mode-host")], text=True).strip() == "host-ok"
+assert subprocess.check_output([str(root / "codex-path/rg")], text=True).strip() == "rg-ok"
+assert (root / "codex-resources/data.txt").read_text() == "resource-ok"
+if sys.argv[1:] == ["--version"]:
+    print("codex-cli 2.0.0")
+else:
+    print(json.dumps({"args": sys.argv[1:], "home": os.environ["HOME"], "codex_home": os.environ.get("CODEX_HOME"), "root": str(root)}))
+'''
+        script = '''#!/usr/bin/env bash
+set -euo pipefail
+"$CODEX_SWITCH_PYTHON" -I -B - <<'PY'
+import json, os, pathlib
+home = pathlib.Path(os.environ["CODEX_HOME"])
+package = home / "packages/standalone/releases/2.0.0-aarch64-apple-darwin"
+package.mkdir(parents=True)
+files = FILES
+for name, content in files.items():
+    path = package / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    path.chmod(0o755 if name.startswith(("bin/", "codex-path/")) else 0o644)
+(package / "codex").symlink_to("bin/codex")
+(package.parent.parent / "current").symlink_to(package)
+candidate = pathlib.Path(os.environ["CODEX_INSTALL_DIR"]) / "codex"
+candidate.symlink_to(package.parent.parent / "current/bin/codex")
+(home / "config.toml").write_text("private-installer-config")
+(home / "auth.json").write_text("private-installer-credential")
+with open(os.environ["CODEX_TEST_EVENTS"], "a") as out:
+    out.write("scratch|" + str(home.parent) + "\\n")
+    out.write("noninteractive|" + os.environ.get("CODEX_NON_INTERACTIVE", "") + "\\n")
+MUTATION
+PY
+'''
+        files = {
+            "bin/codex": runtime,
+            "bin/codex-code-mode-host": "#!/bin/sh\nprintf 'host-ok\\n'\n",
+            "codex-path/rg": "#!/bin/sh\nprintf 'rg-ok\\n'\n",
+            "codex-resources/data.txt": "resource-ok",
+            "codex-package.json": '{"version":"2.0.0"}',
+        }
+        self.f._write_script(
+            self.f.installer_script,
+            script.replace("FILES", repr(files)).replace("MUTATION", mutation),
+        )
+
+    def stage(self, label: str = "standalone") -> tuple[Path, subprocess.CompletedProcess[str]]:
+        candidate = self.f._candidate_dir(label)
+        return candidate / "codex", self.f._run_env_setup(candidate)
+
+    def run_candidate(self, candidate: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(candidate), *args], env=self.f.base_env, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+
+    def test_complete_package_survives_private_installer_cleanup(self) -> None:
+        self.write_installer()
+        before = self.f._bound_snapshot()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(candidate.is_symlink())
+        events = self.f.events.read_text().splitlines()
+        scratch = Path(next(line.split("|", 1)[1] for line in events if line.startswith("scratch|")))
+        self.assertFalse(scratch.exists())
+        run = self.run_candidate(candidate, "--version")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.strip(), "codex-cli 2.0.0")
+        self.assertEqual(self.f._bound_snapshot(), before)
+
+    def test_rejects_directory_in_place_of_package_metadata(self) -> None:
+        self.write_installer('(package / "codex-package.json").unlink()\n(package / "codex-package.json").mkdir()')
+        before = self.f._bound_snapshot()
+        _, result = self.stage()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.f._bound_snapshot(), before)
+
+    def test_noninteractive_install_does_not_retain_private_state(self) -> None:
+        self.write_installer('assert os.environ.get("CODEX_NON_INTERACTIVE") == "1"')
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("noninteractive|1", self.f.events.read_text())
+        for path in self.f.install_root.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(b"private-installer-", path.read_bytes(), str(path))
+        signed = [line for line in self.f.events.read_text().splitlines() if line.startswith("codesign:")]
+        self.assertEqual(len(signed), 3, signed)
+        self.assertFalse(any(line.endswith(str(candidate)) for line in signed), signed)
+
+    def test_arguments_and_caller_environment_survive_relocation(self) -> None:
+        moved = self.f.install_root.with_name("bin with 'quotes and spaces")
+        self.f.install_root.rename(moved)
+        self.f.install_root = moved
+        self.f.bound_bin = moved / "codex"
+        self.f.base_env["CODEX_TEST_BOUND_BIN"] = str(self.f.bound_bin)
+        self.f.base_env["CODEX_HOME"] = str(self.f.root / "caller-home")
+        self.write_installer()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        args = ("exec", "a b", "'quoted'", "$(literal)", "line\nbreak")
+        run = self.run_candidate(candidate, *args)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        payload = json.loads(run.stdout)
+        self.assertEqual(payload["args"], list(args))
+        self.assertEqual(payload["home"], str(self.f.home))
+        self.assertEqual(payload["codex_home"], self.f.base_env["CODEX_HOME"])
+
+    def test_rejects_unsafe_or_incomplete_package_before_activation(self) -> None:
+        mutations = [
+            '(package / "bin/codex-code-mode-host").unlink()',
+            '(package / "codex-path/rg").unlink()',
+            '(package / "codex-resources/auth.json").symlink_to(home / "auth.json")',
+            '(package / "config.toml").write_text("private-config")',
+            'candidate.unlink(); candidate.symlink_to(os.environ["CODEX_TEST_BOUND_BIN"])',
+            '(package / "bin/codex-code-mode-host").chmod(0o644)',
+        ]
+        before = self.f._bound_snapshot()
+        for index, mutation in enumerate(mutations):
+            with self.subTest(mutation=mutation):
+                self.write_installer(mutation)
+                _, result = self.stage("unsafe-" + str(index))
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("Standalone runtime preparation failed", result.stderr)
+                self.assertEqual(self.f._bound_snapshot(), before)
+
+    def test_installer_failure_status_and_scratch_cleanup(self) -> None:
+        self.write_installer("raise SystemExit(17)")
+        before = self.f._bound_snapshot()
+        _, result = self.stage()
+        self.assertEqual(result.returncode, 17, result.stdout + result.stderr)
+        self.assertFalse((self.f.install_root / ".codex-internal-runtimes").exists())
+        scratch = Path(next(line.split("|", 1)[1] for line in self.f.events.read_text().splitlines() if line.startswith("scratch|")))
+        self.assertFalse(scratch.exists())
+        self.assertEqual(self.f._bound_snapshot(), before)
+
+    def test_signing_failure_preserves_bound_command(self) -> None:
+        self.write_installer()
+        self.f._write_script(self.f.fake_bin / "codesign", "#!/bin/sh\nexit 29\n")
+        before = self.f._bound_snapshot()
+        _, result = self.stage()
+        self.assertEqual(result.returncode, 29, result.stdout + result.stderr)
+        self.assertEqual(self.f._bound_snapshot(), before)
+
+    def test_runtime_tampering_fails_before_executing_payload(self) -> None:
+        self.write_installer()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        generation = Path(json.loads(self.run_candidate(candidate, "locate").stdout)["root"])
+        for name in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg", "codex-resources/data.txt"):
+            path = generation / name
+            original = path.read_bytes()
+            with self.subTest(file=name):
+                path.write_bytes(original + b"tampered")
+                run = self.run_candidate(candidate, "--version")
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn("runtime manifest mismatch", run.stderr)
+                path.write_bytes(original)
+        extra = generation / "extra"
+        extra.write_text("extra-file")
+        self.assertNotEqual(self.run_candidate(candidate, "--version").returncode, 0)
+        extra.unlink()
+        helper = generation / "codex-path/rg"
+        helper.chmod(0o644)
+        self.assertNotEqual(self.run_candidate(candidate, "--version").returncode, 0)
+        helper.chmod(0o755)
+        original = helper.read_bytes()
+        helper.unlink()
+        helper.symlink_to(self.f.bound_bin)
+        self.assertNotEqual(self.run_candidate(candidate, "--version").returncode, 0)
+        helper.unlink()
+        helper.write_bytes(original)
+        helper.chmod(0o755)
+        self.assertEqual(self.run_candidate(candidate, "--version").returncode, 0)
+
+    def test_reuses_identical_generation_and_preserves_foreign_content(self) -> None:
+        self.write_installer()
+        first, result = self.stage("first")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        second, result = self.stage("second")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        generation = Path(json.loads(self.run_candidate(first, "locate").stdout)["root"])
+        extra = generation / "foreign"
+        extra.write_text("retain-me")
+        _, result = self.stage("third")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(extra.read_text(), "retain-me")
+
+    def promotion(self, candidate: Path, store: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [self.f.base_env["CODEX_SWITCH_PYTHON"], str(PROFILE_SWITCH_MODULE_PATH),
+             "--store-dir", str(store), "--official-codex-home", str(self.f.root / "official-home"),
+             "--internal-codex-home", str(store / "homes/internal"),
+             "--launch-agent-path", str(self.f.root / "agent.plist"), "promote-internal-update",
+             "--bound-bin", str(self.f.bound_bin), "--candidate-bin", str(candidate),
+             "--backup-bin", str(self.f.install_root / ".codex-internal-backup-test"),
+             "--target-version", "2.0.0", "--cli-only"],
+            env=self.f.base_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    def test_cli_only_promotion_keeps_stable_command_after_candidate_cleanup(self) -> None:
+        store = self.f._write_internal_manifest()
+        self.write_installer()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.promotion(candidate, store)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        candidate.parent.rmdir()
+        run = self.run_candidate(self.f.bound_bin, "--version")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.strip(), "codex-cli 2.0.0")
+
+    def test_cli_only_postcondition_failure_restores_prior_command_and_manifest(self) -> None:
+        store = self.f._write_internal_manifest()
+        manifest_path = store / "profiles/internal/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["codex_home"] = "invalid-relative-home"
+        manifest_path.write_text(json.dumps(manifest))
+        before_manifest = manifest_path.read_bytes()
+        before_bound = self.f._bound_snapshot()
+        self.write_installer()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.promotion(candidate, store)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CLI CODEX_HOME path is not absolute", result.stdout + result.stderr)
+        self.assertEqual(self.f._bound_snapshot(), before_bound)
+        self.assertEqual(manifest_path.read_bytes(), before_manifest)
+        self.assertEqual(self.run_candidate(candidate, "--version").returncode, 0)
+
+    def test_tampered_package_is_rejected_before_transactional_promotion(self) -> None:
+        store = self.f._write_internal_manifest()
+        before_bound = self.f._bound_snapshot()
+        before_manifest = (store / "profiles/internal/manifest.json").read_bytes()
+        self.write_installer()
+        candidate, result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        generation = Path(json.loads(self.run_candidate(candidate, "locate").stdout)["root"])
+        (generation / "codex-path/rg").write_text("tampered")
+        result = self.promotion(candidate, store)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.f._bound_snapshot(), before_bound)
+        self.assertEqual((store / "profiles/internal/manifest.json").read_bytes(), before_manifest)
+
+    def test_raw_and_legacy_standalone_layouts(self) -> None:
+        self.write_installer('(package / "codex-package.json").unlink()')
+        candidate, result = self.stage("raw")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.run_candidate(candidate, "--version").returncode, 0)
+        self.write_installer('''import shutil
+(package / "codex").unlink()
+(package / "codex").write_text("#!/bin/sh\\nprintf 'codex-cli 2.0.0\\\\n'\\n")
+(package / "codex").chmod(0o755)
+(package / "codex-path/rg").rename(package / "codex-resources/rg")
+shutil.rmtree(package / "bin")
+shutil.rmtree(package / "codex-path")
+(package / "codex-package.json").unlink()
+candidate.unlink()
+candidate.symlink_to(package / "codex")''')
+        candidate, result = self.stage("legacy-package")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.run_candidate(candidate, "--version").returncode, 0)
+
+
+
+    def test_full_bundle_transaction_promotes_and_rolls_back_standalone_runtime(self) -> None:
+        import_path = mock.patch.object(sys, "path", [str(REPO_ROOT / "scripts"), *sys.path])
+        import_path.start()
+        self.addCleanup(import_path.stop)
+        import test_codex_transaction as transaction_support
+        from codex_switch_constants import SwitchError
+        from codex_switch_transaction import (
+            RuntimeBindingExecutableSwap,
+            commit_runtime_binding_bundle,
+            locked_store_mutation,
+        )
+
+        for fail_postcondition in (False, True):
+            with self.subTest(fail_postcondition=fail_postcondition):
+                root = self.f.root / ("full-failure" if fail_postcondition else "full-success")
+                root.mkdir()
+                harness = transaction_support.TransactionTests()
+                store, artifacts, paths, old_payloads = harness.arrange_runtime_binding_bundle(
+                    root, include_shared_config=True, include_active_runtime_config=True,
+                )
+                self.write_installer()
+                candidate, result = self.stage(root.name)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                old_binary = self.f.bound_bin.read_bytes()
+                candidate_bytes = candidate.read_bytes()
+                swap = RuntimeBindingExecutableSwap(
+                    bound_path=self.f.bound_bin, candidate_path=candidate,
+                    backup_path=self.f.install_root / ".codex-internal-backup-full",
+                    old_mode=0o755, old_sha256=hashlib.sha256(old_binary).hexdigest(),
+                    new_mode=0o755, new_sha256=hashlib.sha256(candidate_bytes).hexdigest(),
+                )
+                probes = []
+
+                def validate() -> None:
+                    run = self.run_candidate(self.f.bound_bin, "--version")
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertEqual(run.stdout.strip(), "codex-cli 2.0.0")
+                    probes.append(True)
+                    if fail_postcondition:
+                        raise SwitchError("test full-bundle postcondition failed")
+
+                def commit() -> None:
+                    with locked_store_mutation(store, operation="standalone package test") as locked:
+                        commit_runtime_binding_bundle(
+                            locked, artifacts=artifacts, executable_swap=swap,
+                            prepared_validator=validate, retire_executable_backup=True,
+                        )
+
+                if fail_postcondition:
+                    with self.assertRaisesRegex(SwitchError, "test full-bundle postcondition"):
+                        commit()
+                    self.assertEqual(self.f.bound_bin.read_bytes(), old_binary)
+                    for path, payload in old_payloads.items():
+                        self.assertEqual(path.read_bytes(), payload)
+                else:
+                    commit()
+                    self.assertEqual(self.f.bound_bin.read_bytes(), candidate_bytes)
+                    candidate.parent.rmdir()
+                    for artifact in artifacts:
+                        self.assertEqual(paths[artifact.role].read_bytes(), artifact.payload)
+                self.assertEqual(probes, [True])
+                self.assertFalse(swap.backup_path.exists())
+                self.assertFalse((store.root / ".runtime-binding-rebind.json").exists())
+                self.assertEqual(self.run_candidate(self.f.bound_bin, "--version").returncode, 0)
+
+    def test_rejects_nested_private_state_files(self) -> None:
+        for name in ("auth.json", "config.toml", ".zprofile"):
+            with self.subTest(name=name):
+                self.write_installer(f'(package / "codex-resources" / {name!r}).write_text("private-installer-state")')
+                _, result = self.stage("private-" + name)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_materialization_termination_preserves_signal_exit_status(self) -> None:
+        self.write_installer()
+        self.f._write_script(
+            self.f.fake_bin / "codesign",
+            "#!/usr/bin/env python3\nimport os, time\n"
+            "with open(os.environ['CODEX_TEST_EVENTS'], 'a') as output:\n"
+            "    output.write('materializing\\n')\n"
+            "time.sleep(2)\n",
+        )
+        candidate = self.f._candidate_dir("signal-materialization")
+        process = subprocess.Popen(
+            [str(ENV_SETUP), "update-internal", "--internal-bin", str(self.f.bound_bin),
+             "--install-dir", str(candidate), "--version", "2.0.0",
+             "--model", "test-model", "--azure-base-url", "https://example.invalid/api",
+             "--skip-source-check", "--skip-proxy"],
+            env=self.f.base_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if self.f.events.exists() and "materializing" in self.f.events.read_text():
+                    break
+                if process.poll() is not None:
+                    self.fail("helper exited before the materialization signal test")
+                time.sleep(0.05)
+            else:
+                self.fail("materialization did not start")
+            process.send_signal(signal.SIGTERM)
+            stdout, stderr = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 143, stdout + stderr)
+            self.assertNotIn("candidate ready", stdout)
+            self.assertEqual(self.f.bound_bin.read_bytes(), self.f.bound_copy.read_bytes())
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+
+    def test_native_launcher_preserves_stable_argv_zero(self) -> None:
+        # Exercise real native argv[0], without launching a live Codex process.
+        scratch = self.f.root / "native-scratch"
+        scratch.mkdir(mode=0o700)
+        package = scratch / "codex-home/packages/standalone/releases/2.0.0-aarch64-apple-darwin"
+        (package / "bin").mkdir(parents=True)
+        if sys.platform == "darwin":
+            # Apple platform shells cannot be relocated as ordinary app
+            # binaries on every macOS host; compile a tiny fixture instead.
+            compiler = shutil.which("cc")
+            if compiler is None:
+                self.skipTest("native macOS argv[0] fixture requires a C compiler")
+            subprocess.run(
+                [compiler, "-x", "c", "-", "-o", str(package / "bin/codex")],
+                input='#include <stdio.h>\nint main(int argc, char **argv) { fputs(argv[0], stdout); return 0; }\n',
+                text=True, env=self.f.base_env, check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            )
+        else:
+            shutil.copyfile("/bin/sh", package / "bin/codex")
+            (package / "bin/codex").chmod(0o755)
+        self.f._write_script(package / "bin/codex-code-mode-host", "#!/bin/sh\nexit 0\n")
+        self.f._write_script(package / "codex-path/rg", "#!/bin/sh\nexit 0\n")
+        (package / "codex").symlink_to("bin/codex")
+        candidate = self.f._candidate_dir("native 'quoted path") / "codex"
+        candidate.parent.mkdir(mode=0o700)
+        candidate.symlink_to(package / "bin/codex")
+        result = subprocess.run(
+            [self.f.base_env["CODEX_SWITCH_PYTHON"], "-I", "-B",
+             str(REPO_ROOT / "scripts/codex_switch_internal_runtime.py"),
+             "--candidate", str(candidate), "--scratch", str(scratch), "--version", "2.0.0"],
+            env=self.f.base_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        env = {**self.f.base_env, "PATH": str(candidate.parent) + os.pathsep + self.f.base_env["PATH"]}
+        for command in (str(candidate), "codex", os.path.relpath(candidate, self.f.root)):
+            with self.subTest(command=command):
+                result = subprocess.run(
+                    [command, "-c", 'printf "%s" "$0"'], cwd=self.f.root, env=env,
+                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(Path(result.stdout).resolve(), candidate.resolve())
 
 
 if __name__ == "__main__":
