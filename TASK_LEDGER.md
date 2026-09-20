@@ -7,8 +7,8 @@
 - Execution source: `openspec/changes/respect-custom-model-catalog/tasks.md`.
 - Baseline: 9c9bc73; scope and write set are recorded in that change's design.
 - Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
-- Status: implementation and independent reviews pass; parity/profile/transaction
-  and first-install checks pass. Update/release and package verification remain.
+- Status: implementation, isolated regressions, package validation and both
+  review axes pass. Commit/push and PR description update are next.
 - Live installation, provider requests, and release publication are excluded.
 
 ## Active Repair: First Internal Installation
@@ -612,6 +612,7 @@ write task.
 
 | id | finding | disposition | reason / residual risk | follow-up |
 |---|---|---|---|---|
+| INC-028 | Historical migration fixture retained the first-install helper after removing its update-policy dependency | CONTINUE_WITH_MINIMAL_GUARD | Test-only removal restores the old-version layout; both installer/runner subcases pass on recheck | Resolved in custom-catalog repair; production behavior unchanged |
 | INC-001 | arbitrary profile name containment | DEFER_AND_CONTINUE | user confirms only official/internal product profiles; unsupported legacy paths remain less hardened | revisit only if custom profiles become product scope |
 | INC-002 | snapshot plus `--shared-config-base` semantics | DEFER_AND_CONTINUE | not needed by approved product paths; silent reinterpretation is forbidden | separate behavior decision if requested |
 | INC-003 | historical Codex.app exact identity | DEFER_AND_CONTINUE | bundle absent; path-only observation cannot certify health | add provenance fixture before any migration execution |

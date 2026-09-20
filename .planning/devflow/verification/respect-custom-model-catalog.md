@@ -30,7 +30,7 @@ are the new OpenSpec change, parity source/tests, README and scoped diff.
 Each reports concrete file/line findings and severity. Main owns all fixes and
 final verification; no filesystem write scope overlaps exist.
 
-## Verification in progress
+## Final verification
 
 - Parity: 99/99 passed, including the complete custom-catalog preparation matrix.
 - Transaction: 258 cases, 257 passed and one existing skip.
@@ -40,6 +40,15 @@ final verification; no filesystem write scope overlaps exist.
 - Independent Spec and Standards reviews report no open findings. Spec review
   independently reran six focused cases successfully.
 - Profile: 227/227 passed.
-- Update/release regressions and exact package verification are still running;
-  PR delivery is pending. Logs owned by this run use the prefix
+- Update/release: all 196 cases executed; 195 passed initially. One historical
+  fixture failed in its installer and runner subcases because it retained the
+  new first-install helper after removing the helper's dependency. Correcting
+  that fixture's historical file set made both subcases pass on recheck.
+- Exact implementation commit f116f6d was archived and packaged. In fresh
+  temporary roots, the previous PR package installed, upgraded to the new
+  package, and ran status. The complete custom-catalog preparation fixture then
+  passed using installed modules; the installed bundle remained manifest-valid.
+- Both reviewers accepted the bounded historical-fixture correction with no
+  additional findings. No production bytes changed after package verification.
+- PR delivery is pending. Logs owned by this run use the prefix
 `.planning/devflow/verification/local/custom-catalog-`.

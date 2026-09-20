@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: implementation
+current_stage: verification
 
 current_change:
   id: respect-custom-model-catalog
-  status: implementing
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: false
-  verification_passed: false
+  implementation_done: true
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -90,8 +90,9 @@ context_health:
 
 Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
-repair, focused regressions and independent reviews pass. Broad update/release
-and exact package checks are in progress.
+repair, broad regressions, exact package checks and independent reviews pass.
+The historical migration fixture correction also passes both entrypoint cases.
+Commit/push and PR description update are pending.
 
 First-install restoration is implemented and passes its 22-case isolated
 command matrix, package/native checks, regressions, and independent review.

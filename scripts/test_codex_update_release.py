@@ -7254,6 +7254,7 @@ class CodexInstallerRunnerAdapterTests(unittest.TestCase):
                     "codex_switch_promotion.py",
                     "codex_switch_update_policy.py",
                     "codex_switch_official_release.py",
+                    "codex_switch_first_install.py",
                 ):
                     (layout_root / "current" / "scripts" / module_name).unlink()
                 install_dir = self.root / "legacy-bin" / entrypoint_label

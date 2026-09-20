@@ -53,6 +53,12 @@ TemporaryDirectory roots belong to individual tests. This run owns
 .planning/devflow/verification/local/custom-catalog-*.log; preserve unrelated
 untracked research and all historical artifacts.
 
+The complete update/release regression exposed a historical fixture containing
+the new first-install helper after deliberately removing its update-policy
+dependency. The historical-migration test now also removes that anachronistic
+helper from its old-version fixture. This bounded test-only correction in
+scripts/test_codex_update_release.py changes no runtime or packaging policy.
+
 ## Skill Routing Ledger
 
 - artifact-status: final; workflow: Full OpenSpec.

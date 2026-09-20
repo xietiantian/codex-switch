@@ -8,8 +8,8 @@
 - [x] 2.2 Verify repeat overlay preparation, promotion revalidation and old-policy rejection.
 
 ## 3. Delivery
-- [ ] 3.1 Run focused and broad isolated regressions, package/static checks and strict OpenSpec validation.
-- [ ] 3.2 Complete independent Spec and Standards reviews; update public docs and evidence.
+- [x] 3.1 Run focused and broad isolated regressions, package/static checks and strict OpenSpec validation.
+- [x] 3.2 Complete independent Spec and Standards reviews; update public docs and evidence.
 - [ ] 3.3 Commit/push to the existing PR and refresh the isolated local PR test package.
 
 Owner/write set/evidence contract: design.md. Evidence:
