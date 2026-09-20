@@ -92,7 +92,8 @@ Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
 repair, broad regressions, exact package checks and independent reviews pass.
 The historical migration fixture correction also passes both entrypoint cases.
-Commit/push and PR description update are pending.
+Implementation f116f6d and fixture correction 3a92076 are pushed to PR #1;
+its description and remote head were read back successfully.
 
 First-install restoration is implemented and passes its 22-case isolated
 command matrix, package/native checks, regressions, and independent review.
@@ -117,5 +118,6 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Implement and verify custom-catalog parity, then update PR #1.
+Await upstream review of PR #1. The local test package is pinned to f116f6d,
+whose production bytes match the delivered branch.
 Release publication and live installation remain separate.

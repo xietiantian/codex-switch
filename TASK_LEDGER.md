@@ -8,7 +8,8 @@
 - Baseline: 9c9bc73; scope and write set are recorded in that change's design.
 - Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
 - Status: implementation, isolated regressions, package validation and both
-  review axes pass. Commit/push and PR description update are next.
+  review axes pass. Commits f116f6d and 3a92076 are pushed to PR #1; its
+  description includes custom-catalog applicability and final verification.
 - Live installation, provider requests, and release publication are excluded.
 
 ## Active Repair: First Internal Installation

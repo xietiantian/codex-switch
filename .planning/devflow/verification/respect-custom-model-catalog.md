@@ -50,5 +50,8 @@ final verification; no filesystem write scope overlaps exist.
   passed using installed modules; the installed bundle remained manifest-valid.
 - Both reviewers accepted the bounded historical-fixture correction with no
   additional findings. No production bytes changed after package verification.
-- PR delivery is pending. Logs owned by this run use the prefix
+- PR #1 contains implementation f116f6d and historical fixture fix 3a92076.
+  Its title/body and remote head were read back after push. The local test
+  runner selects the exact verified implementation package. No runtime bytes
+  changed in the follow-up fixture/evidence commits. Logs owned by this run use the prefix
 `.planning/devflow/verification/local/custom-catalog-`.
