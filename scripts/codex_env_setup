@@ -28,6 +28,7 @@ SKIP_PROXY=0
 DRY_RUN=0
 PYTHON_BIN="${CODEX_SWITCH_PYTHON:-python3}"
 INTERNAL_CANDIDATE_LAYOUT="legacy"
+FIRST_INSTALL=0
 
 usage() {
   cat <<'USAGE'
@@ -141,7 +142,7 @@ validate_staged_candidate_request() {
   "$PYTHON_BIN" -I -B - \
     "$INTERNAL_BIN" \
     "$INSTALL_DIR" \
-    "$INSTALL_DIR_EXPLICIT" <<'PY'
+    "$INSTALL_DIR_EXPLICIT" "$FIRST_INSTALL" <<'PY'
 import os
 import stat
 import sys
@@ -167,9 +168,15 @@ if bound.name != "codex":
     fail(f"bound binary basename must be codex: {bound}")
 try:
     bound_state = os.lstat(bound)
+except FileNotFoundError:
+    if sys.argv[4] != "1":
+        fail(f"bound binary is unavailable: {bound}")
+    bound_state = None
 except OSError as error:
     fail(f"bound binary is unavailable: {error}")
-if (
+if sys.argv[4] == "1" and bound_state is not None:
+    fail("first-install target already exists")
+if bound_state is not None and (
     stat.S_ISLNK(bound_state.st_mode)
     or not stat.S_ISREG(bound_state.st_mode)
     or bound_state.st_mode & 0o111 == 0
@@ -251,7 +258,7 @@ PY
 }
 
 bound_binary_identity() {
-  "$PYTHON_BIN" -I -B - "$1" <<'PY'
+  "$PYTHON_BIN" -I -B - "$1" "$FIRST_INSTALL" <<'PY'
 import hashlib
 import json
 import os
@@ -280,6 +287,13 @@ def identity_fields(state: os.stat_result) -> tuple[int, ...]:
 
 
 path = Path(sys.argv[1])
+if sys.argv[2] == "1":
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        print("absent")
+        raise SystemExit(0)
+    fail(f"first-install target appeared: {path}")
 if not hasattr(os, "O_NOFOLLOW"):
     fail("no-follow file open is unsupported")
 flags = os.O_RDONLY | os.O_NOFOLLOW
@@ -872,6 +886,10 @@ install_wrapper() {
 
 parse_common_option() {
   case "$1" in
+    --first-install)
+      FIRST_INSTALL=1
+      return 1
+      ;;
     --internal-bin)
       [[ $# -ge 2 ]] || { echo "--internal-bin requires a value" >&2; exit 2; }
       INTERNAL_BIN="$(expand_shell_path "$2")"

@@ -195,6 +195,7 @@ def filesystem_snapshot(root: Path) -> Dict[str, bytes]:
 
 
 def write_required_python_modules(scripts_dir: Path) -> None:
+    shutil.copy2(WRAPPER.with_name("codex_switch_first_install.py"), scripts_dir / "codex_switch_first_install.py")
     shutil.copy2(MODULE_PATH, scripts_dir / MODULE_PATH.name)
     shutil.copy2(PROMOTION_MODULE_PATH, scripts_dir / PROMOTION_MODULE_PATH.name)
     shutil.copy2(

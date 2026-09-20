@@ -2066,9 +2066,23 @@ internal_update_install_dir_for_profile_bin() {
 }
 
 resolve_internal_update_target_bin() {
-  local install_dir profile_bin
+  local install_dir profile_bin argument previous="" explicit_bin=""
+  for argument in "$@"; do
+    if [[ "$previous" == "--internal-bin" ]]; then
+      explicit_bin="$(expand_shell_path "$argument")"
+    fi
+    previous="$argument"
+  done
   if install_dir="$(update_internal_requested_install_dir "$@")"; then
+    if [[ -n "$explicit_bin" && "$explicit_bin" != "${install_dir%/}/codex" ]]; then
+      echo "update-internal: --internal-bin conflicts with --install-dir." >&2
+      return 2
+    fi
     printf '%s/codex\n' "${install_dir%/}"
+    return
+  fi
+  if [[ -n "$explicit_bin" ]]; then
+    printf '%s\n' "$explicit_bin"
     return
   fi
   if [[ -n "${CODEX_INSTALL_DIR:-}" ]]; then
@@ -2162,6 +2176,51 @@ verify_internal_update_target() {
   printf '%s\n' "$after_version"
 }
 
+run_first_internal_install() {
+  local env_setup="$1" codex_bin="$2"
+  shift 2
+  local target_version latest_url latest_tag argument previous=""
+  local install_args=()
+  resolve_python_bin
+  if "$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_first_install.py" \
+    --target "$codex_bin" --store "$STORE_DIR" --check; then
+    true
+  else
+    return $?
+  fi
+  if update_internal_args_have_version "$@"; then
+    target_version="$(update_internal_requested_version "$@")" || return $?
+  else
+    latest_url="${CODEX_SWITCH_INTERNAL_LATEST_URL:-${CODEX_INTERNAL_LATEST_URL:-https://github.com/SDGLBL/codex/releases/latest}}"
+    for argument in "$@"; do
+      if [[ "$previous" == "--latest-url" ]]; then
+        latest_url="$argument"
+      fi
+      previous="$argument"
+    done
+    latest_tag="$(latest_internal_tag_from_url "$latest_url")" || {
+      echo "update-internal: cannot resolve a version for first installation; verify the release and pass --version." >&2
+      return 1
+    }
+    target_version="$("$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_first_install.py" \
+      --target "$codex_bin" --store "$STORE_DIR" --release-tag "$latest_tag" \
+      --blocked-versions "$(internal_blocked_versions)" \
+      --fallback-version "$(internal_fallback_version)")" || return $?
+  fi
+  if ! internal_update_version_is_valid "$target_version"; then
+    echo "update-internal: first installation requires a valid semantic version." >&2
+    return 2
+  fi
+  update_internal_forward_arguments "$@" || return $?
+  if update_internal_args_have_dry_run "$@"; then
+    install_args+=(--dry-run)
+  fi
+  exec "$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_first_install.py" \
+    --target "$codex_bin" --store "$STORE_DIR" --helper "$env_setup" \
+    --version "$target_version" ${install_args[@]+"${install_args[@]}"} \
+    -- ${UPDATE_INTERNAL_FORWARD_ARGS[@]+"${UPDATE_INTERNAL_FORWARD_ARGS[@]}"}
+}
+
 run_update_internal_env_setup() {
   local env_setup="$1"
   shift
@@ -2188,6 +2247,11 @@ run_update_internal_env_setup() {
   if normalize_internal_update_arguments "$@"; then
     set -- ${NORMALIZED_INTERNAL_UPDATE_ARGS[@]+"${NORMALIZED_INTERNAL_UPDATE_ARGS[@]}"}
   else
+    return $?
+  fi
+  if [[ ! -e "$profile_manifest" && ! -L "$profile_manifest" ]]; then
+    codex_bin="$(resolve_internal_update_target_bin "$@")" || return $?
+    run_first_internal_install "$env_setup" "$codex_bin" "$@"
     return $?
   fi
   if update_internal_args_have_version "$@"; then

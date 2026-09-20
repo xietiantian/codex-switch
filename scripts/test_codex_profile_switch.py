@@ -198,6 +198,7 @@ def write_required_release_modules(scripts_dir: Path) -> None:
         UPDATE_POLICY_MODULE,
         scripts_dir / UPDATE_POLICY_MODULE.name,
     )
+    shutil.copy2(WRAPPER.with_name("codex_switch_first_install.py"), scripts_dir / "codex_switch_first_install.py")
     (scripts_dir / OFFICIAL_RELEASE_MODULE.name).write_text(
         "VALUE = 1\n"
     )

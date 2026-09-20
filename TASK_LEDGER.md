@@ -1,5 +1,18 @@
 # Task Ledger
 
+## Active Repair: First Internal Installation
+
+- Approved: restore first-install behavior on the existing PR branch, isolated
+  verification, and PR update. No live installation or release publication.
+- Execution source: `openspec/changes/restore-first-internal-install/tasks.md`.
+- Scope: public update routing, absent-state candidate preparation, safe first
+  publication, tests, and generic public documentation.
+- Evidence: `.planning/devflow/verification/restore-first-internal-install.md`.
+- Status: implementation, isolated verification, and independent review pass;
+  22 first-install tests, all 196 update/release and 227 profile cases accounted
+  for, including successful rechecks of corrected package fixtures. PR update next.
+- Historical records and unrelated research remain preserved.
+
 ## Active Repair: Standalone Runtime Installation
 
 - Approved: generic package-preserving installer repair, isolated testing, and PR.

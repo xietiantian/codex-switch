@@ -4,7 +4,7 @@ project_mode: brownfield
 current_stage: verification
 
 current_change:
-  id: support-standalone-installer-runtime
+  id: restore-first-internal-install
   status: verified
 
 standing_milestone:
@@ -41,8 +41,8 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-20-standalone-runtime-repair
-  last_checkpoint_file: .planning/devflow/verification/support-standalone-installer-runtime.md
+  last_checkpoint_id: 2026-09-20-first-internal-install
+  last_checkpoint_file: .planning/devflow/verification/restore-first-internal-install.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
@@ -69,7 +69,7 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: support-standalone-installer-runtime
+  id: restore-first-internal-install
   required: true
   status: satisfied
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
@@ -81,12 +81,17 @@ context_health:
   last_confidence: medium
   last_decision: repair_standalone_installer_compatibility
   last_goal_status: aligned
-  goal_summary: Preserve complete standalone runtimes through isolated installation and transactional activation.
+  goal_summary: Restore safe first installation while preserving existing upgrade protection.
 ---
 
 # Workflow State
 
 ## Active Repair Status
+
+First-install restoration is implemented and passes its 22-case isolated
+command matrix, package/native checks, regressions, and independent review.
+Updating the existing PR remains.
+The canonical execution source is restore-first-internal-install/tasks.md.
 
 The standalone installer compatibility repair and isolated verification pass. Its
 OpenSpec tasks and verification record are authoritative for this branch.
@@ -106,6 +111,6 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Await upstream review of https://github.com/cYz26/codex-switch/pull/1.
-The implementation and isolated verification are complete. Keep this change
-active for PR review; release publication and live installation are separate.
+Complete first-install regression/review and update
+https://github.com/cYz26/codex-switch/pull/1. Release publication and live
+installation remain separate.

@@ -290,7 +290,17 @@ reviewing the findings, an explicit
 through the same staged `set-bin internal <current-backend>` rebind; it does not
 patch the receipt, overlay, config, launcher, or manifest in place.
 
-`update-internal` installs and probes a candidate in a private sibling directory
+With no internal profile and no command at the selected install target,
+`update-internal` performs a first installation. It validates a private candidate
+and publishes the command without overwriting another installation. Existing
+commands, dangling links, partial profiles, and leftover backups are not treated
+as fresh installs. Configure Codex and run `init --capture-current internal`
+after installation; this path does not create a profile, change configuration,
+activate Desktop, or claim Desktop compatibility. `--dry-run` previews this
+path without filesystem changes. An explicit `--version` works without release
+discovery; otherwise a valid latest release or policy fallback is required.
+
+For an existing profile, `update-internal` installs and probes a candidate in a private sibling directory
 while the bound binary remains available. It validates parity before replacing
 the bound path, promotes the binary and runtime bundle through one recoverable
 journal, and retains the old binary backup until version, binding, app-server,
