@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: external_effects
+current_stage: verification
 
 current_change:
   id: support-standalone-installer-runtime
-  status: external_effects
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -106,5 +106,6 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Commit the verified generic public diff and submit the approved pull request. Historical release authority
-above does not authorize new release publication or a direct push to main.
+Await upstream review of https://github.com/cYz26/codex-switch/pull/1.
+The implementation and isolated verification are complete. Keep this change
+active for PR review; release publication and live installation are separate.

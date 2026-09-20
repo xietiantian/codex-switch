@@ -5,7 +5,7 @@
 The repair preserves recognized standalone packages after private installer
 cleanup, retains the stable command and native process identity, and uses the
 existing full/CLI-only transactions. All required isolated verification and
-review checks passed. PR submission is the remaining delivery action.
+review checks passed. The repair is submitted for upstream review.
 
 ## Contract and environment
 
@@ -82,4 +82,5 @@ Only this repository's own planning conventions are included.
 
 README documents the user-visible installer/launcher contract; no separate
 knowledge asset is needed. The OpenSpec change stays active for PR review.
-Delivery URL: pending.
+Delivery URL: https://github.com/cYz26/codex-switch/pull/1
+Implementation commit: `b1ef95e`. Delivery-record updates do not change runtime code.

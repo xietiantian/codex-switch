@@ -11,7 +11,7 @@
 ## 3. Verification and delivery
 - [x] 3.1 Run focused update/transaction suites, full profile regression, syntax, packaging, and strict OpenSpec validation.
 - [x] 3.2 Review the complete diff and verify all added public text is generic; record results and remaining limits.
-- [ ] 3.3 Commit, push to an authorized fork, and open a pull request to main.
+- [x] 3.3 Commit, push to an authorized fork, and open a pull request to main.
 
 Owner: primary agent. Execution source: this file. Evidence:
 `.planning/devflow/verification/support-standalone-installer-runtime.md`.

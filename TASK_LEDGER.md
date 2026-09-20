@@ -7,7 +7,7 @@
 - Scope: installer adapter, runtime validation/launcher, tests, public docs.
 - Non-goals: installed workstation changes, release publication, unrelated cleanup.
 - Evidence: `.planning/devflow/verification/support-standalone-installer-runtime.md`.
-- Continuation: auto-until-terminal through the authorized pull request.
+- Delivered: https://github.com/cYz26/codex-switch/pull/1; implementation and isolated verification complete.
 - Historical goals below are retained as prior records, not current authority.
 
 ## Goal Contract
