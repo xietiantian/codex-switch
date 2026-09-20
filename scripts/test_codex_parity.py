@@ -1505,6 +1505,7 @@ class ParityPolicyTests(unittest.TestCase):
         protocol: ProtocolInventoryComparison | None = None,
         official_model_metadata: dict[str, object] | None = None,
         internal_model_metadata: dict[str, object] | None = None,
+        custom_model_catalog: bool = False,
         observed_protocol_methods: frozenset[tuple[str, str]] = frozenset(),
         observed_features: frozenset[str] = frozenset(),
     ):
@@ -1525,9 +1526,57 @@ class ParityPolicyTests(unittest.TestCase):
             or {"multi_agent_version": "v2"},
             internal_model_metadata=internal_model_metadata
             or {"multi_agent_version": "v2"},
+            custom_model_catalog=custom_model_catalog,
             observed_protocol_methods=observed_protocol_methods,
             observed_features=observed_features,
         )
+
+    def test_custom_catalog_metadata_is_not_compared_to_official_models(self) -> None:
+        result = self.evaluate(
+            custom_model_catalog=True,
+            official_model_metadata={
+                "multi_agent_version": "official-value",
+                "tool_mode": "official-tools",
+                "future_field": "official-only",
+            },
+            internal_model_metadata={"tool_mode": "provider-tools"},
+        )
+        self.assertTrue(result.healthy)
+        self.assertEqual(result.canonical_payload()["findings"], [{
+            "category": "model_metadata",
+            "code": "parity.model.custom_catalog_not_applicable",
+            "severity": "info",
+        }])
+        self.assertEqual(result.synchronization_queue, ())
+
+    def test_custom_catalog_does_not_bypass_runtime_protocol_failures(self) -> None:
+        result = self.evaluate(
+            custom_model_catalog=True,
+            protocol=ProtocolInventoryComparison(entries=(
+                self.protocol_difference("client_request", "initialize"),
+            )),
+        )
+        self.assertFalse(result.healthy)
+        self.assertIn("parity.protocol.core_missing", {
+            finding.code for finding in result.findings
+        })
+
+    def test_custom_catalog_does_not_bypass_runtime_feature_failures(self) -> None:
+        result = self.evaluate(
+            custom_model_catalog=True,
+            features=self.feature_comparison(
+                official=(self.feature("unknown_runtime_feature"),),
+                internal=(),
+            ),
+        )
+        self.assertFalse(result.healthy)
+        self.assertIn("parity.feature.unclassified_drift", {
+            finding.code for finding in result.findings
+        })
+
+    def test_custom_catalog_context_requires_an_explicit_boolean(self) -> None:
+        with self.assertRaises(ParityValidationError):
+            self.evaluate(custom_model_catalog="false")
 
     def test_baseline_protocol_closures_are_core_and_unhealthy(self) -> None:
         entries = [
@@ -4449,14 +4498,14 @@ class ParityPreparationTests(unittest.TestCase):
             source_catalog.parent.mkdir()
             source_payload = (
                 b'{"models":[{"provider":"azure",'
-                b'"slug":"gpt-5.6-sol"}]}\n'
+                b'"slug":"provider-private-model"}]}\n'
             )
             source_catalog.write_bytes(source_payload)
             source_catalog.chmod(0o640)
 
             profile_config = profile_dir / "config.toml"
             profile_config.write_text(
-                'model = "gpt-5.6-sol"\n'
+                'model = "provider-private-model"\n'
                 'model_provider = "azure"\n'
                 f"model_catalog_json = {json.dumps(str(source_catalog))}\n"
                 "\n"
@@ -4478,19 +4527,7 @@ class ParityPreparationTests(unittest.TestCase):
             active_runtime_config = internal_home / "config.toml"
             active_runtime_config.write_text('profile = "old-runtime"\n')
             active_runtime_config.chmod(0o600)
-            (official_home / "models_cache.json").write_text(
-                json.dumps(
-                    {
-                        "models": [
-                            {
-                                "slug": "gpt-5.6-sol",
-                                "multi_agent_version": "v2",
-                                "tool_mode": "code_mode",
-                            }
-                        ]
-                    }
-                )
-            )
+            # An explicit custom catalog does not create an official cache.
 
             bundle_root = root / "Applications" / "ChatGPT.app"
             contents = bundle_root / "Contents"
@@ -4631,6 +4668,71 @@ class ParityPreparationTests(unittest.TestCase):
             )
 
             self.assertTrue(bundle.healthy)
+            finding_code = "parity.model.custom_catalog_not_applicable"
+            self.assertIn(finding_code, {f.code for f in bundle.findings})
+            restored = parity_module.ParityReceipt.from_payload(
+                json.loads(bundle.receipt.canonical_bytes)
+            )
+            self.assertEqual(restored.canonical_bytes, bundle.receipt.canonical_bytes)
+            old_policy = json.loads(bundle.receipt.canonical_bytes)
+            old_policy["policy_version"] = "1"
+            with self.assertRaises(ParityValidationError) as raised:
+                parity_module.ParityReceipt.from_payload(old_policy)
+            self.assertEqual(raised.exception.code, "parity.receipt.policy_unsupported")
+
+            def prepare_custom(probe=probe_runner, selected_candidate=candidate):
+                return prepare(
+                    selected_candidate,
+                    work_root=work_root,
+                    timeouts=timeouts_type(command_seconds=1.0, probe_seconds=1.0),
+                    _schema_loader=lambda _path, _timeout: schema_payload,
+                    _version_loader=lambda _path, _timeout: "codex-cli 0.144.6",
+                    _feature_runner=lambda _request: feature_result(
+                        "multi_agent_v2  stable  true\n"
+                    ),
+                    _probe_runner=probe,
+                )
+
+            cache = official_home / "models_cache.json"
+            cache_payloads = (
+                b"invalid-json",
+                b'{"models":[{"slug":"different-official-model"}]}',
+                b'{"models":[{"slug":"provider-private-model",'
+                b'"multi_agent_version":"v1","tool_mode":"official-only"}]}',
+            )
+            for payload in cache_payloads:
+                with self.subTest(unrelated_official_cache=payload):
+                    cache.write_bytes(payload)
+                    prepared = prepare_custom()
+                    self.assertTrue(prepared.healthy)
+                    self.assertEqual(cache.read_bytes(), payload)
+                    cache.write_bytes(b"changed after preparation")
+                    parity_module.revalidate_parity_bundle_inputs(prepared)
+                    parity_module.revalidate_parity_bundle_immutable_inputs(prepared)
+            cache.unlink()
+            cache.symlink_to(official_home / "absent-cache-target")
+            self.assertTrue(prepare_custom().healthy)
+            self.assertTrue(cache.is_symlink())
+            cache.unlink()
+
+            bad_catalogs = (
+                b"not-json", b"{}", b'{"models":[]}',
+                b'{"models":[{"slug":"wrong-model"}]}',
+                b'{"models":[{"slug":"provider-private-model"},'
+                b'{"slug":"provider-private-model"}]}',
+            )
+            for payload in bad_catalogs:
+                with self.subTest(invalid_custom_catalog=payload):
+                    source_catalog.write_bytes(payload)
+                    with self.assertRaises(ParityValidationError):
+                        prepare_custom()
+            source_catalog.write_bytes(source_payload)
+            source_catalog.chmod(0o640)
+            with self.assertRaises(ParityValidationError) as raised:
+                prepare_custom(lambda _request: parity_module.ParityProbeCommandResult(
+                    returncode=1, stdout="", stderr="fixture probe failed",
+                ))
+            self.assertEqual(raised.exception.code, "parity.preparation.probe_unhealthy")
             self.assertTrue(bundle.config_projection.healthy)
             self.assertEqual(
                 bundle.active_runtime_config_path,
@@ -4815,7 +4917,7 @@ class ParityPreparationTests(unittest.TestCase):
                             {
                                 "provider": "azure",
                                 "provider_revision": "fresh",
-                                "slug": "gpt-5.6-sol",
+                                "slug": "provider-private-model",
                             }
                         ]
                     },
@@ -4870,6 +4972,12 @@ class ParityPreparationTests(unittest.TestCase):
                 rebound_overlay["models"][0]["provider_revision"],
                 "fresh",
             )
+
+            with self.assertRaises(ParityValidationError) as raised:
+                prepare_custom(selected_candidate=replace(
+                    rebound_candidate, internal_manifest={},
+                ))
+            self.assertEqual(raised.exception.code, "parity.preparation.config_invalid")
 
             original_profile_config = profile_config.with_name(
                 "config.original.toml"
@@ -5017,7 +5125,7 @@ class ParityProbeTests(unittest.TestCase):
         overlay_path = codex_home / "parity" / "model-catalog.json"
         overlay_sha256 = self.write_probe_artifact(
             overlay_path,
-            b'{"models":[{"slug":"gpt-5.6-sol",'
+            b'{"models":[{"slug":"provider-private-model",'
             b'"multi_agent_version":"v2"}]}\n',
             mode=0o600,
         )
@@ -5025,7 +5133,7 @@ class ParityProbeTests(unittest.TestCase):
         config_sha256 = self.write_probe_artifact(
             config_path,
             (
-                'model = "gpt-5.6-sol"\n'
+                'model = "provider-private-model"\n'
                 f"model_catalog_json = {json.dumps(str(overlay_path))}\n"
                 "\n"
                 "[features]\n"

@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: implementation
 
 current_change:
-  id: restore-first-internal-install
-  status: verified
+  id: respect-custom-model-catalog
+  status: implementing
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: true
-  verification_passed: true
+  implementation_done: false
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -79,14 +79,19 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: repair_standalone_installer_compatibility
+  last_decision: respect_custom_model_catalog
   last_goal_status: aligned
-  goal_summary: Restore safe first installation while preserving existing upgrade protection.
+  goal_summary: Respect custom model catalogs while preserving runtime compatibility checks.
 ---
 
 # Workflow State
 
 ## Active Repair Status
+
+Custom-catalog parity correction is approved on the existing PR branch.
+The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
+repair, focused regressions and independent reviews pass. Broad update/release
+and exact package checks are in progress.
 
 First-install restoration is implemented and passes its 22-case isolated
 command matrix, package/native checks, regressions, and independent review.
@@ -111,5 +116,5 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Await upstream review of https://github.com/cYz26/codex-switch/pull/1.
+Implement and verify custom-catalog parity, then update PR #1.
 Release publication and live installation remain separate.

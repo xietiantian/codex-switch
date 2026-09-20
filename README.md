@@ -84,7 +84,13 @@ Before commit, promotion renders a private copy of the real internal shim and
 executes its `--version` path; failure restores the previous binary and manifest.
 Final split smoke separately executes the actual post-switch store shim.
 Direct `codex-switch update-internal` remains the explicit full Desktop-parity
-update path. For a controlled switch
+update path. An explicit custom model catalog is provider-owned: a matching
+official model name does not imply matching capabilities. This path does not
+read or require the official `models_cache.json`; its receipt records official
+model comparison as not applicable. Catalog integrity, original-source
+provenance behind managed overlays, Desktop protocol compatibility, required
+runtime features, and bounded behavior probes still apply. Existing receipts
+from the previous policy require fresh preparation. For a controlled switch
 that keeps both currently installed versions, use
 `codex-switch split --keep-version`. This option does not skip Plugin repair,
 verify, Doctor, status, App-effect derivation, transaction validation, or the

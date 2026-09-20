@@ -35,7 +35,7 @@ from codex_switch_runtime_binding import (
 )
 
 
-PARITY_POLICY_VERSION = "1"
+PARITY_POLICY_VERSION = "2"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -6935,8 +6935,6 @@ class ParityBundle:
     staged_capability_receipt_path: Path | None = None
     staged_capability_receipt_payload: bytes | None = None
     candidate: ParityCandidate | None = None
-    official_model_cache_path: Path | None = None
-    official_model_cache_sha256: str = ""
 
     def __post_init__(self) -> None:
         paths = _validate_parity_bundle_artifacts(
@@ -7012,8 +7010,6 @@ class ParityBundle:
             self.staged_capability_receipt_path,
             self.staged_capability_receipt_payload,
             self.candidate,
-            self.official_model_cache_path,
-            self.official_model_cache_sha256,
         )
         if self.config_projection is None:
             if any(
@@ -7138,30 +7134,19 @@ class ParityBundle:
                     "parity.bundle.active_config_invalid",
                     "Parity bundle active runtime config is not the proven v2 projection.",
                 )
-        if not isinstance(self.official_model_cache_path, Path):
-            raise ParityValidationError(
-                "parity.bundle.reference_invalid",
-                "Parity bundle official model cache path is missing.",
-            )
-        official_model_cache_path = _canonical_path(
-            self.official_model_cache_path,
-            code="parity.bundle.reference_invalid",
-            field_name="official model cache",
+        custom_findings = tuple(
+            finding for finding in self.receipt.findings
+            if finding.code == "parity.model.custom_catalog_not_applicable"
         )
         if (
-            official_model_cache_path
-            != self.candidate.official_binding.codex_home
-            / "models_cache.json"
+            len(custom_findings) != 1
+            or custom_findings[0].category != "model_metadata"
+            or custom_findings[0].severity != "info"
         ):
             raise ParityValidationError(
-                "parity.bundle.reference_invalid",
-                "Parity bundle official model cache path is invalid.",
+                "parity.bundle.model_scope_invalid",
+                "Custom catalog comparison applicability is missing or invalid.",
             )
-        _require_sha256(
-            self.official_model_cache_sha256,
-            code="parity.bundle.reference_invalid",
-            field_name="official model cache digest",
-        )
         capability_artifact = self.candidate.capability_receipt
         if (
             not isinstance(capability_artifact, CapabilityReceiptArtifact)
@@ -7186,11 +7171,6 @@ class ParityBundle:
             self,
             "staged_capability_receipt_path",
             staged_capability_receipt_path,
-        )
-        object.__setattr__(
-            self,
-            "official_model_cache_path",
-            official_model_cache_path,
         )
 
     @property
@@ -7483,26 +7463,6 @@ def _known_model_metadata(
     )
 
 
-def _model_cache_snapshot(
-    path: Path,
-    *,
-    active_model: str,
-) -> tuple[_RegularFileSnapshot, Mapping[str, object]]:
-    snapshot = _regular_file_snapshot(
-        path,
-        code="parity.reference.model_cache_invalid",
-        label="official model cache",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-        capture_payload=True,
-    )
-    assert snapshot.payload is not None
-    document = _parse_parity_catalog_source(snapshot.payload)
-    return snapshot, _known_model_metadata(
-        document,
-        active_model=active_model,
-    )
-
-
 def _source_catalog_from_candidate(
     candidate: ParityCandidate,
     *,
@@ -7758,7 +7718,6 @@ def _revalidate_preparation_fingerprints(
     official_binary: _RegularFileSnapshot,
     internal_binary: _RegularFileSnapshot,
     overlay: ParityOverlayArtifact,
-    official_model_cache: _RegularFileSnapshot,
     internal_schema_sha256: str,
 ) -> None:
     if candidate.adapter_rule_set_sha256 != protocol_adapter_rule_set_digest():
@@ -7830,21 +7789,6 @@ def _revalidate_preparation_fingerprints(
         raise ParityValidationError(
             "parity.preparation.candidate_stale",
             "Parity config sources changed during preparation.",
-        )
-
-    refreshed_model_cache = _regular_file_snapshot(
-        official_model_cache.path,
-        code="parity.preparation.reference_stale",
-        label="official model cache",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-    )
-    if not _preparation_snapshot_matches(
-        official_model_cache,
-        refreshed_model_cache,
-    ):
-        raise ParityValidationError(
-            "parity.preparation.reference_stale",
-            "Official model cache changed during parity preparation.",
         )
 
     capability_artifact = candidate.capability_receipt
@@ -7939,13 +7883,9 @@ def prepare_parity_bundle(
     active_runtime_payload = (
         runtime_payload if active_runtime_path is not None else None
     )
-    official_model_cache_path = (
-        candidate.official_binding.codex_home / "models_cache.json"
-    )
-    official_model_cache, official_model_metadata = _model_cache_snapshot(
-        official_model_cache_path,
-        active_model=config_identity.active_model,
-    )
+    # _config_identity validates an explicit provider catalog and resolves the
+    # original source behind any managed overlay. The same slug in an official
+    # catalog cannot establish equivalence with this provider-owned model.
     overlay_document = _parse_parity_catalog_source(
         overlay.overlay_payload
     )
@@ -8097,7 +8037,8 @@ def prepare_parity_bundle(
         eligibility_evaluation = evaluate_parity_policy(
             feature_comparison=feature_comparison,
             protocol_comparison=protocol_comparison,
-            official_model_metadata=official_model_metadata,
+            official_model_metadata={},
+            custom_model_catalog=True,
             internal_model_metadata=internal_model_metadata,
             method_coverage=method_coverage,
             evaluation_stage="eligibility",
@@ -8143,7 +8084,6 @@ def prepare_parity_bundle(
             official_binary=official_binary,
             internal_binary=internal_binary,
             overlay=overlay,
-            official_model_cache=official_model_cache,
             internal_schema_sha256=internal_schema_sha256,
         )
         typed_probe_result = next(
@@ -8157,7 +8097,8 @@ def prepare_parity_bundle(
         final_policy_evaluation = evaluate_parity_policy(
             feature_comparison=feature_comparison,
             protocol_comparison=protocol_comparison,
-            official_model_metadata=official_model_metadata,
+            official_model_metadata={},
+            custom_model_catalog=True,
             internal_model_metadata=internal_model_metadata,
             method_coverage=method_coverage,
             evaluation_stage="final",
@@ -8317,8 +8258,6 @@ def prepare_parity_bundle(
             ),
             staged_capability_receipt_payload=capability_artifact.payload,
             candidate=candidate,
-            official_model_cache_path=official_model_cache.path,
-            official_model_cache_sha256=official_model_cache.sha256,
         )
         revalidate_parity_bundle_inputs(prepared)
         return prepared
@@ -8339,7 +8278,6 @@ def _revalidate_parity_bundle_inputs(
         not isinstance(bundle, ParityBundle)
         or bundle.config_projection is None
         or bundle.candidate is None
-        or bundle.official_model_cache_path is None
     ):
         raise ParityValidationError(
             "parity.bundle.preparation_incomplete",
@@ -8451,17 +8389,6 @@ def _revalidate_parity_bundle_inputs(
                     "parity.bundle.candidate_stale",
                     "Parity config source changed before promotion.",
                 )
-    model_cache = _regular_file_snapshot(
-        bundle.official_model_cache_path,
-        code="parity.bundle.reference_stale",
-        label="official model cache",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-    )
-    if model_cache.sha256 != bundle.official_model_cache_sha256:
-        raise ParityValidationError(
-            "parity.bundle.reference_stale",
-            "Official model cache changed before promotion.",
-        )
 
 
 def revalidate_parity_bundle_inputs(bundle: ParityBundle) -> None:
@@ -9032,6 +8959,7 @@ def evaluate_parity_policy(
     protocol_comparison: ProtocolInventoryComparison,
     official_model_metadata: Mapping[str, object],
     internal_model_metadata: Mapping[str, object],
+    custom_model_catalog: bool = False,
     acceptance_trace: ParityAcceptanceTrace | None = None,
     observed_protocol_methods: frozenset[tuple[str, str]] = frozenset(),
     observed_features: frozenset[str] = frozenset(),
@@ -9060,6 +8988,11 @@ def evaluate_parity_policy(
         raise ParityValidationError(
             "parity.policy.input_invalid",
             "Parity policy model metadata must be mappings.",
+        )
+    if type(custom_model_catalog) is not bool:
+        raise ParityValidationError(
+            "parity.policy.input_invalid",
+            "Custom catalog context must be boolean.",
         )
     if evaluation_stage not in {"eligibility", "final"}:
         raise ParityValidationError(
@@ -9596,85 +9529,95 @@ def evaluate_parity_policy(
             )
         )
 
-    official_multi_agent = official_model_metadata.get("multi_agent_version")
-    internal_multi_agent = internal_model_metadata.get("multi_agent_version")
-    if official_multi_agent == "v2" and internal_multi_agent != "v2":
+    if custom_model_catalog:
         findings.append(
-            _policy_finding(
+            ParityFinding(
                 category="model_metadata",
-                code="parity.model.multi_agent_version_core",
-                severity="error",
-                identifier="multi_agent_version",
-                expected="v2",
-                observed="missing_or_non_v2",
+                code="parity.model.custom_catalog_not_applicable",
+                severity="info",
+                message="Official model comparison is not applicable to a custom catalog.",
             )
         )
-    elif official_multi_agent != internal_multi_agent:
-        findings.append(
-            _policy_finding(
-                category="model_metadata",
-                code="parity.model.unclassified_drift",
-                severity="error",
-                identifier="multi_agent_version",
-                expected="classified",
-                observed="drift",
-            )
-        )
-
-    official_tool_mode = official_model_metadata.get("tool_mode")
-    internal_tool_mode = internal_model_metadata.get("tool_mode")
-    if official_tool_mode != internal_tool_mode:
-        if official_tool_mode is not None:
-            code = "parity.model.tool_mode_pending_provider"
+    else:
+        official_multi_agent = official_model_metadata.get("multi_agent_version")
+        internal_multi_agent = internal_model_metadata.get("multi_agent_version")
+        if official_multi_agent == "v2" and internal_multi_agent != "v2":
             findings.append(
                 _policy_finding(
                     category="model_metadata",
-                    code=code,
-                    severity="warning",
-                    identifier="tool_mode",
-                    expected="provider-evidence",
-                    observed="pending",
+                    code="parity.model.multi_agent_version_core",
+                    severity="error",
+                    identifier="multi_agent_version",
+                    expected="v2",
+                    observed="missing_or_non_v2",
                 )
             )
-            queue.append(
-                ParityQueueItem(
-                    category="model_metadata",
-                    identifier="tool_mode",
-                    finding_code=code,
-                )
-            )
-        else:
+        elif official_multi_agent != internal_multi_agent:
             findings.append(
                 _policy_finding(
                     category="model_metadata",
                     code="parity.model.unclassified_drift",
                     severity="error",
-                    identifier="tool_mode",
+                    identifier="multi_agent_version",
                     expected="classified",
-                    observed="internal_only",
+                    observed="drift",
                 )
             )
 
-    known_model_keys = {"multi_agent_version", "tool_mode"}
-    for key in sorted(
-        (
-            set(official_model_metadata)
-            | set(internal_model_metadata)
-        )
-        - known_model_keys
-    ):
-        if official_model_metadata.get(key) == internal_model_metadata.get(key):
-            continue
-        findings.append(
-            _policy_finding(
-                category="model_metadata",
-                code="parity.model.unclassified_drift",
-                severity="error",
-                identifier=key,
-                expected="classified",
-                observed="drift",
+        official_tool_mode = official_model_metadata.get("tool_mode")
+        internal_tool_mode = internal_model_metadata.get("tool_mode")
+        if official_tool_mode != internal_tool_mode:
+            if official_tool_mode is not None:
+                code = "parity.model.tool_mode_pending_provider"
+                findings.append(
+                    _policy_finding(
+                        category="model_metadata",
+                        code=code,
+                        severity="warning",
+                        identifier="tool_mode",
+                        expected="provider-evidence",
+                        observed="pending",
+                    )
+                )
+                queue.append(
+                    ParityQueueItem(
+                        category="model_metadata",
+                        identifier="tool_mode",
+                        finding_code=code,
+                    )
+                )
+            else:
+                findings.append(
+                    _policy_finding(
+                        category="model_metadata",
+                        code="parity.model.unclassified_drift",
+                        severity="error",
+                        identifier="tool_mode",
+                        expected="classified",
+                        observed="internal_only",
+                    )
+                )
+
+        known_model_keys = {"multi_agent_version", "tool_mode"}
+        for key in sorted(
+            (
+                set(official_model_metadata)
+                | set(internal_model_metadata)
             )
-        )
+            - known_model_keys
+        ):
+            if official_model_metadata.get(key) == internal_model_metadata.get(key):
+                continue
+            findings.append(
+                _policy_finding(
+                    category="model_metadata",
+                    code="parity.model.unclassified_drift",
+                    severity="error",
+                    identifier=key,
+                    expected="classified",
+                    observed="drift",
+                )
+            )
 
     return ParityPolicyEvaluation(
         healthy=(

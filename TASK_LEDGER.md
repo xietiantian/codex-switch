@@ -1,5 +1,16 @@
 # Task Ledger
 
+## Active Repair: Custom Model Catalog Parity
+
+- Approved: skip official-model comparison for validated custom catalogs,
+  preserve runtime/source checks, isolate verification, and update PR #1.
+- Execution source: `openspec/changes/respect-custom-model-catalog/tasks.md`.
+- Baseline: 9c9bc73; scope and write set are recorded in that change's design.
+- Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
+- Status: implementation and independent reviews pass; parity/profile/transaction
+  and first-install checks pass. Update/release and package verification remain.
+- Live installation, provider requests, and release publication are excluded.
+
 ## Active Repair: First Internal Installation
 
 - Approved: restore first-install behavior on the existing PR branch, isolated
