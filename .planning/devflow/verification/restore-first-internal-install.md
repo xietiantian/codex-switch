@@ -46,9 +46,11 @@ CLI behavior and this repository's own planning/evidence conventions.
 
 ## Delivery
 
-The implementation is verified for updating PR
-https://github.com/cYz26/codex-switch/pull/1. No release or live installation is
-part of this delivery. The first-install change remains active for review.
+Implementation commit e41c134e06887e575255ac9243ab31cea1a97b70 was pushed to
+the existing PR https://github.com/cYz26/codex-switch/pull/1, whose title and
+description now cover both standalone runtimes and first installations.
+The PR is open and mergeable. No release or live installation is part of this
+delivery. The first-install change remains active for upstream review.
 
 ## Artifact ownership
 

@@ -10,7 +10,7 @@
 ## 3. Delivery
 - [x] 3.1 Run update/profile regressions, package verification, syntax, and strict OpenSpec validation.
 - [x] 3.2 Review generic public docs/diff and record evidence.
-- [ ] 3.3 Commit, push, and update the existing PR.
+- [x] 3.3 Commit, push, and update the existing PR.
 
 Owner: primary agent. Write set: scripts/codex-switch, scripts/codex_env_setup,
 first-install helper, release module allowlist/trust hashes, focused tests,

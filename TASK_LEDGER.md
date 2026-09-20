@@ -10,7 +10,8 @@
 - Evidence: `.planning/devflow/verification/restore-first-internal-install.md`.
 - Status: implementation, isolated verification, and independent review pass;
   22 first-install tests, all 196 update/release and 227 profile cases accounted
-  for, including successful rechecks of corrected package fixtures. PR update next.
+  for, including successful rechecks of corrected package fixtures.
+- Delivered: PR #1 updated; implementation commit e41c134. No release/live install.
 - Historical records and unrelated research remain preserved.
 
 ## Active Repair: Standalone Runtime Installation

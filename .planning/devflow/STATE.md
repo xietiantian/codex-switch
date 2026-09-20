@@ -90,7 +90,7 @@ context_health:
 
 First-install restoration is implemented and passes its 22-case isolated
 command matrix, package/native checks, regressions, and independent review.
-Updating the existing PR remains.
+The existing PR is updated with implementation commit e41c134.
 The canonical execution source is restore-first-internal-install/tasks.md.
 
 The standalone installer compatibility repair and isolated verification pass. Its
@@ -111,6 +111,5 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Complete first-install regression/review and update
-https://github.com/cYz26/codex-switch/pull/1. Release publication and live
-installation remain separate.
+Await upstream review of https://github.com/cYz26/codex-switch/pull/1.
+Release publication and live installation remain separate.
