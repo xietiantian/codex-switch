@@ -1482,6 +1482,8 @@ _RUNTIME_BINDING_BUNDLE_OPTIONAL_ROLES = frozenset(
     {
         "shared_config",
         "active_runtime_config",
+        "parity_internal_model_source",
+        "parity_official_model_source",
     }
 )
 _RUNTIME_BINDING_BUNDLE_SCOPE_FULL = "full"
@@ -1490,6 +1492,8 @@ _RUNTIME_BINDING_BUNDLE_CLI_ONLY_REQUIRED_ROLES = frozenset(
     {"manifest"}
 )
 _RUNTIME_BINDING_BUNDLE_ACTIVATION_ORDER = (
+    "parity_internal_model_source",
+    "parity_official_model_source",
     "parity_overlay",
     "capability_receipt",
     "parity_receipt",
@@ -1548,6 +1552,8 @@ def _runtime_binding_bundle_expected_paths(store: Store) -> dict[str, Path]:
         "capability_receipt": capability_receipt_path_for_launcher(launcher),
         "parity_receipt": parity_dir / "receipt.json",
         "parity_overlay": parity_dir / "model-catalog.json",
+        "parity_internal_model_source": parity_dir / "internal-model-source.json",
+        "parity_official_model_source": parity_dir / "official-model-source.json",
         "profile_config": profile_dir / "config.toml",
         "shared_config": store.official_codex_home / "config.toml",
         "active_runtime_config": internal_home / "config.toml",

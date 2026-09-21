@@ -2987,6 +2987,10 @@ class ParityReceiptTests(unittest.TestCase):
             schema_version=seams["PARITY_RECEIPT_SCHEMA_VERSION"],
             official_reference=reference,
             internal_fingerprint=internal,
+            model_sources=(
+                parity_module.ModelCatalogReference("internal", "cache", internal.source_catalog, internal.source_catalog_sha256, internal.binary_sha256),
+                parity_module.ModelCatalogReference("official", "cache", root / "official/models_cache.json", SHA_A, reference.binary_sha256),
+            ),
             feature_inventory_sha256s=(
                 ("official", SHA_C),
                 ("internal", SHA_D),
@@ -3091,6 +3095,7 @@ class ParityReceiptTests(unittest.TestCase):
                 parity_module.current_parity_acceptance_trace()
             )
             expected = {
+                "model_sources": [dict(source.canonical_payload()) for source in receipt.model_sources],
                 "acceptance_trace": dict(
                     acceptance_trace.canonical_payload()
                 ),
@@ -4232,6 +4237,10 @@ class ParityBundleManifestTests(unittest.TestCase):
             schema_version=parity_module.PARITY_RECEIPT_SCHEMA_VERSION,
             official_reference=reference,
             internal_fingerprint=internal,
+            model_sources=(
+                parity_module.ModelCatalogReference("internal", "cache", source_path, source_sha256, internal.binary_sha256),
+                parity_module.ModelCatalogReference("official", "cache", root / "official/models_cache.json", SHA_A, reference.binary_sha256),
+            ),
             feature_inventory_sha256s=(
                 ("official", SHA_C),
                 ("internal", SHA_D),

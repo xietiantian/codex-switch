@@ -139,3 +139,59 @@ domain language modeling skipped (existing catalog/receipt vocabulary);
 OpenSpec routing used (reopened original change); TDD uses approved public seams.
 Unavailable higher-level DevFlow skill entrypoints are represented by these
 canonical intake, planning and execution records, as in the initial repair.
+
+## Reopened correction: absent default caches
+
+The latest reported update reaches the ordinary branch but fails on a missing
+internal models_cache.json. Both runtime homes can legitimately lack that file.
+Previous cache-only tests and completion claims do not establish this case.
+Baseline: 1019312. Continue the original repair under the requester's existing
+implementation, isolated-test and PR delivery authorization.
+
+Native isolated research verified official 0.155.0-alpha.9.2 and candidate
+0.155.0 can export nine complete entries with debug models --bundled, including
+the selected model's multi_agent_version and tool_mode. Neither requires login,
+refresh or a cache. model/list omits required raw metadata and is not a substitute.
+
+Target: explicit custom catalogs keep their existing exemption. Default sources
+prefer a valid existing cache; only FileNotFoundError permits offline export
+from the exact corresponding binary. Invalid, unsafe or unreadable caches do not
+fall back. Unsupported commands, timeout, oversized/malformed output, missing
+active models and binary/source drift fail. Retain ordinary metadata comparison,
+features, schemas, native probes and transaction rollback.
+
+Use the existing bounded capture/process primitives for a hermetic exporter in
+parity.py. Bind source kind, path, payload digest and binary digest to receipt
+metadata. Cache sources retain file identity checks. Bundled sources are private
+staged snapshots and become profile-local source artifacts in the existing rebind
+transaction, never user models_cache.json. Both source kinds retain their origin
+across generated overlays; each later update selects current cache/binary evidence
+and regenerates acceptance, not an old binary's bundled snapshot. A newly appearing
+cache invalidates an absent-cache preparation. Bump policy; legacy receipt parsing
+is provenance-only and preserves genuine cache/custom origins.
+
+Owner: primary agent. Write set extends the earlier correction with the artifact
+role/path guard in scripts/codex_switch_transaction.py and artifact publication in
+scripts/codex_switch_bindings.py, plus focused tests of those public seams. Keep
+existing atomic effects and cleanup rather than introducing a second publication
+mechanism. The receipt contains bounded metadata; full source payloads live in
+source artifacts, not the small receipt. No new dependency or public CLI flag.
+
+TDD: first fail full preparation with missing internal/official/both caches, then
+verify cache/custom precedence, raw metadata completeness, supported/unsupported
+exports, timeout/output bounds, source and binary changes, immutable revalidation,
+receipt round trip, repeated managed updates and rollback of new source artifacts.
+Run parity/current/routing, transaction and profile suites; validate an exact
+committed package using isolated previous-to-candidate install. Run two-axis
+read-only review and strict pinned OpenSpec, then update PR and the stable test
+entrypoint. Production promotion and provider-backed Desktop UI are not performed.
+
+Generated artifacts: the run owns local/default-model-* logs and the registered
+local/default-model-runtime-research root. Additional source/package checks get a
+new absent local/default-model-package root before creation. Retain all artifacts
+and pre-existing research; do not clean or modify workstation installs/configs.
+
+Skill routing: original OpenSpec apply/update, TDD and two-axis code review apply.
+Direct filesystem/native evidence resolves the source decision; no unresolved
+product choice or generic architecture rewrite is introduced. Missing optional
+high-level methodology entrypoints retain the previously documented fallback.

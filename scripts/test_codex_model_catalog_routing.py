@@ -92,7 +92,7 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         self.work = self.root / "work"
         self.work.mkdir(mode=0o700)
 
-    def prepare(self, candidate=None, *, probe_runner=None):
+    def prepare(self, candidate=None, *, probe_runner=None, catalog_loader=None, timeouts=None):
         selected = candidate or self.candidate
         selected = replace(selected, source_config=parity.ConfigInputs.capture(
             profile_config=self.profile, source_paths=(self.profile, self.shared),
@@ -105,11 +105,12 @@ class ModelCatalogRoutingTests(unittest.TestCase):
             )
         return parity.prepare_parity_bundle(
             selected, work_root=self.work,
-            timeouts=parity.ParityTimeouts(command_seconds=1.0, probe_seconds=1.0),
+            timeouts=timeouts or parity.ParityTimeouts(command_seconds=1.0, probe_seconds=1.0),
             _schema_loader=lambda _path, _timeout: self.schema,
             _version_loader=lambda _path, _timeout: "codex-cli 0.155.0",
             _feature_runner=RecordingFeatureRunner([feature_result("multi_agent_v2  stable  true\n") for _ in range(4)]),
             _probe_runner=probe_runner or success,
+            _catalog_loader=catalog_loader,
         )
 
     def test_absent_catalog_reaches_default_model_comparison(self):
@@ -188,9 +189,9 @@ class ModelCatalogRoutingTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(parity.ParityValidationError):
                 self.prepare()
 
-    def test_default_caches_are_required_and_safely_read(self):
+    def test_present_default_caches_are_safely_read(self):
         for cache in (self.internal_cache, self.official_cache):
-            for state in ("missing", "symlink", "malformed", "missing-model"):
+            for state in ("symlink", "malformed", "missing-model"):
                 with self.subTest(cache=cache.name + str(cache.parent), state=state):
                     cache.unlink()
                     if state == "symlink":

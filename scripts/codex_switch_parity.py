@@ -35,7 +35,7 @@ from codex_switch_runtime_binding import (
 )
 
 
-PARITY_POLICY_VERSION = "4"
+PARITY_POLICY_VERSION = "5"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -6216,6 +6216,74 @@ def prepare_parity_overlay(
 
 
 @dataclass(frozen=True)
+class ModelCatalogReference:
+    side: str
+    kind: str
+    path: Path
+    sha256: str
+    binary_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.side not in ("internal", "official") or self.kind not in ("cache", "bundled"):
+            raise ParityValidationError("parity.model.source_invalid", "Model source kind or side is invalid.")
+        object.__setattr__(self, "path", _canonical_path(
+            self.path, code="parity.model.source_invalid", field_name="model source path",
+        ))
+        for name in ("sha256", "binary_sha256"):
+            _require_sha256(getattr(self, name), code="parity.model.source_invalid", field_name=name)
+
+    def canonical_payload(self) -> Mapping[str, object]:
+        return {"side": self.side, "kind": self.kind, "path": str(self.path),
+                "sha256": self.sha256, "binary_sha256": self.binary_sha256}
+
+
+def _parse_model_catalog_references(value: object) -> tuple[ModelCatalogReference, ...]:
+    result = []
+    for entry in _receipt_list(value, label="model sources"):
+        item = _receipt_mapping(
+            entry, keys=frozenset({"side", "kind", "path", "sha256", "binary_sha256"}),
+            label="model source",
+        )
+        result.append(ModelCatalogReference(
+            side=_receipt_string(item["side"], label="model source side"),
+            kind=_receipt_string(item["kind"], label="model source kind"),
+            path=Path(_receipt_string(item["path"], label="model source path")),
+            sha256=_receipt_digest(item["sha256"], label="model source digest"),
+            binary_sha256=_receipt_digest(item["binary_sha256"], label="model source binary digest"),
+        ))
+    return tuple(result)
+
+
+@dataclass(frozen=True)
+class _ModelCatalogSource:
+    reference: ModelCatalogReference
+    payload: bytes
+    cache_path: Path
+    cache_snapshot: _RegularFileSnapshot | None = None
+    staged_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.reference, ModelCatalogReference)
+            or not isinstance(self.payload, bytes)
+            or len(self.payload) > MAX_PARITY_CATALOG_BYTES
+            or hashlib.sha256(self.payload).hexdigest() != self.reference.sha256
+        ):
+            raise ParityValidationError("parity.model.source_invalid", "Model source payload is invalid.")
+        if self.reference.kind == "cache":
+            if (
+                not isinstance(self.cache_snapshot, _RegularFileSnapshot)
+                or self.cache_snapshot.path != self.cache_path
+                or self.reference.path != self.cache_path
+                or self.cache_snapshot.sha256 != self.reference.sha256
+                or self.staged_path is not None
+            ):
+                raise ParityValidationError("parity.model.source_invalid", "Cache source identity is invalid.")
+        elif self.cache_snapshot is not None:
+            raise ParityValidationError("parity.model.source_invalid", "Bundled source cannot carry a cache identity.")
+
+
+@dataclass(frozen=True)
 class ParityReceipt:
     schema_version: int
     official_reference: OfficialReference
@@ -6229,6 +6297,7 @@ class ParityReceipt:
     overlay_changes: tuple[Mapping[str, object], ...]
     probe_results: tuple[tuple[str, str, str], ...]
     policy_evaluation: ParityPolicyEvaluation
+    model_sources: tuple[ModelCatalogReference, ...] = ()
 
     def __post_init__(self) -> None:
         if self.schema_version != PARITY_RECEIPT_SCHEMA_VERSION:
@@ -6335,6 +6404,28 @@ class ParityReceipt:
             "probe_results",
             _normalize_receipt_probe_results(self.probe_results),
         )
+        custom_catalog = any(
+            finding.code == "parity.model.custom_catalog_not_applicable"
+            for finding in self.findings
+        )
+        if custom_catalog and self.model_sources:
+            raise ParityValidationError("parity.receipt.invalid", "Custom catalogs cannot carry default model sources.")
+        if not custom_catalog:
+            if (
+                len(self.model_sources) != 2
+                or any(not isinstance(source, ModelCatalogReference) for source in self.model_sources)
+                or {source.side for source in self.model_sources} != {"internal", "official"}
+            ):
+                raise ParityValidationError("parity.receipt.invalid", "Default model source evidence is invalid.")
+            sources = {source.side: source for source in self.model_sources}
+            if (
+                sources["internal"].binary_sha256 != self.internal_fingerprint.binary_sha256
+                or sources["official"].binary_sha256 != self.official_reference.binary_sha256
+                or sources["internal"].path != self.internal_fingerprint.source_catalog
+                or sources["internal"].sha256 != self.internal_fingerprint.source_catalog_sha256
+            ):
+                raise ParityValidationError("parity.receipt.invalid", "Model sources do not match runtime fingerprints.")
+            object.__setattr__(self, "model_sources", tuple(sorted(self.model_sources, key=lambda source: source.side)))
 
     @property
     def healthy(self) -> bool:
@@ -6360,6 +6451,8 @@ class ParityReceipt:
         policy = self.policy_evaluation.canonical_payload()
         return MappingProxyType(
             {
+                **({"model_sources": [dict(source.canonical_payload()) for source in self.model_sources]}
+                   if self.model_sources else {}),
                 "acceptance_trace": dict(
                     self.acceptance_trace.canonical_payload()
                 ),
@@ -6911,7 +7004,7 @@ def _parse_parity_receipt(
         )
     raw = _receipt_mapping(
         payload,
-        keys=_PARITY_RECEIPT_KEYS,
+        keys=_PARITY_RECEIPT_KEYS | ({"model_sources"} if isinstance(payload, Mapping) and "model_sources" in payload else set()),
         label="parity receipt",
     )
     schema_version = raw["schema_version"]
@@ -7020,6 +7113,7 @@ def _parse_parity_receipt(
         overlay_changes=tuple(changes),
         probe_results=tuple(probes),
         policy_evaluation=_parse_receipt_policy(raw),
+        model_sources=_parse_model_catalog_references(raw["model_sources"]) if "model_sources" in raw else (),
     )
 
 
@@ -7187,7 +7281,9 @@ def _parity_bundle_manifest_metadata(
                 "custom" if any(
                     finding.code == "parity.model.custom_catalog_not_applicable"
                     for finding in receipt.findings
-                ) else "runtime-cache"
+                ) else "runtime-" + next(
+                    (source.kind for source in receipt.model_sources if source.side == "internal"), "cache",
+                )
             ),
         }
     )
@@ -7297,12 +7393,15 @@ class ParityBundle:
     staged_capability_receipt_payload: bytes | None = None
     candidate: ParityCandidate | None = None
     official_model_cache: _RegularFileSnapshot | None = None
+    model_sources: tuple[_ModelCatalogSource, ...] = ()
 
     def __post_init__(self) -> None:
         paths = _validate_parity_bundle_artifacts(
             self.receipt,
             self.overlay,
         )
+        if not isinstance(self.model_sources, tuple):
+            raise ParityValidationError("parity.bundle.model_scope_invalid", "Model sources must be a tuple.")
         if (
             not isinstance(self.receipt_payload, bytes)
             or self.receipt_payload != self.receipt.canonical_bytes
@@ -7373,6 +7472,7 @@ class ParityBundle:
             self.staged_capability_receipt_payload,
             self.candidate,
             self.official_model_cache,
+            self.model_sources or None,
         )
         if self.config_projection is None:
             if any(
@@ -7507,15 +7607,11 @@ class ParityBundle:
                 and custom_findings[0].category == "model_metadata"
                 and custom_findings[0].severity == "info"
                 and self.official_model_cache is None
+                and not self.model_sources
+                and not self.receipt.model_sources
             )
         else:
-            valid_scope = (
-                isinstance(self.official_model_cache, _RegularFileSnapshot)
-                and self.official_model_cache.path
-                == self.candidate.official_binding.codex_home / "models_cache.json"
-                and self.overlay.source_catalog
-                == self.candidate.internal_binding.codex_home / "models_cache.json"
-            )
+            valid_scope = _validate_prepared_model_sources(self)
         if not valid_scope:
             raise ParityValidationError(
                 "parity.bundle.model_scope_invalid",
@@ -7582,6 +7678,13 @@ class ParityBundle:
         return self.overlay.overlay_payload
 
     @property
+    def model_source_artifacts(self) -> tuple[tuple[str, Path, bytes], ...]:
+        return tuple(
+            (source.reference.side, source.reference.path, source.payload)
+            for source in self.model_sources if source.reference.kind == "bundled"
+        )
+
+    @property
     def active_runtime_config(self) -> tuple[Path, bytes] | None:
         if (
             self.active_runtime_config_path is None
@@ -7592,6 +7695,34 @@ class ParityBundle:
             self.active_runtime_config_path,
             self.active_runtime_config_payload,
         )
+
+
+def _validate_prepared_model_sources(bundle: ParityBundle) -> bool:
+    sources = bundle.model_sources
+    if (
+        len(sources) != 2
+        or any(not isinstance(source, _ModelCatalogSource) for source in sources)
+        or tuple(source.reference for source in sources) != bundle.receipt.model_sources
+    ):
+        return False
+    for source in sources:
+        binding = (bundle.candidate.internal_binding if source.reference.side == "internal"
+                   else bundle.candidate.official_binding)
+        if source.cache_path != binding.codex_home / "models_cache.json":
+            return False
+        if source.reference.kind == "bundled":
+            expected_name = f"{source.reference.side}-model-source.json"
+            if (
+                source.reference.path != bundle.receipt.overlay_path.parent / expected_name
+                or source.staged_path != bundle.staging_root / expected_name
+            ):
+                return False
+        _revalidate_model_source(source)
+    return (
+        bundle.overlay.source_catalog == sources[0].reference.path
+        and bundle.overlay.source_catalog_sha256 == sources[0].reference.sha256
+        and bundle.official_model_cache == sources[1].cache_snapshot
+    )
 
 
 def _validate_parity_work_root(work_root: Path) -> Path:
@@ -7714,7 +7845,7 @@ class _ParityConfigIdentity:
     endpoint_sha256: str
     auth_source_kind: str
     source_catalog: Path
-    source_catalog_sha256: str
+    source_catalog_sha256: str | None
     custom_model_catalog: bool
 
 
@@ -7838,21 +7969,120 @@ def _known_model_metadata(
     )
 
 
-def _model_cache_snapshot(
-    path: Path,
-    *,
-    active_model: str,
-) -> tuple[_RegularFileSnapshot, Mapping[str, object]]:
-    snapshot = _regular_file_snapshot(
-        path,
-        code="parity.reference.model_cache_invalid",
-        label="official model cache",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-        capture_payload=True,
+def _model_cache_absent(path: Path) -> bool:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError as exc:
+        raise ParityValidationError(
+            "parity.model.cache_unsafe", "Model cache cannot be inspected safely.",
+        ) from exc
+    return False
+
+
+def _dump_bundled_model_catalog(cli_path: Path, work_root: Path, timeout_seconds: float) -> bytes:
+    """Export the binary's baseline catalog without credentials or refresh."""
+    with tempfile.TemporaryDirectory(prefix="model-export-", dir=str(work_root)) as temporary:
+        isolated_home = Path(temporary)
+        isolated_home.chmod(0o700)
+        environment = {
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "LANG": "en_US.UTF-8",
+            "CODEX_HOME": str(isolated_home),
+            "HTTP_PROXY": "http://127.0.0.1:9",
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "ALL_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+        }
+        deadline = time.monotonic() + timeout_seconds
+        try:
+            process = subprocess.Popen(
+                [str(cli_path), "-c", 'cli_auth_credentials_store="file"', "debug", "models", "--bundled"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=isolated_home, env=environment, start_new_session=True,
+            )
+        except OSError as exc:
+            raise ParityValidationError("parity.model.export_failed", "Bundled model export could not start.") from exc
+        stdout = _BoundedCapture(MAX_PARITY_CATALOG_BYTES)
+        stderr = _BoundedCapture(64 * 1024)
+        threads = tuple(threading.Thread(target=_read_bounded_stream, args=(stream, capture), daemon=True)
+                        for stream, capture in ((process.stdout, stdout), (process.stderr, stderr)))
+        for thread in threads:
+            thread.start()
+        timed_out = False
+        try:
+            process.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _terminate_parity_probe_process_group(process)
+        finally:
+            for thread in threads:
+                thread.join(timeout=0.5)
+            if any(thread.is_alive() for thread in threads):
+                timed_out = True
+                _terminate_parity_probe_process_group(process)
+                for thread in threads:
+                    thread.join(timeout=0.5)
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+        if timed_out:
+            raise ParityValidationError("parity.model.export_timeout", "Bundled model export exceeded its time limit.")
+        if stdout.discarded or stderr.discarded:
+            raise ParityValidationError("parity.model.export_oversized", "Bundled model export exceeded its output limit.")
+        if process.returncode != 0:
+            raise ParityValidationError(
+                "parity.model.export_failed", "Runtime does not provide a successful offline bundled model export.",
+            )
+        return bytes(stdout.buffer)
+
+
+def _load_default_model_source(
+    *, side: str, binding: RuntimeBinding, binary: _RegularFileSnapshot,
+    profile_dir: Path, active_model: str, work_root: Path, timeout_seconds: float,
+    catalog_loader: Callable[[Path, Path, float], bytes],
+) -> _ModelCatalogSource:
+    cache_path = binding.codex_home / "models_cache.json"
+    snapshot = None
+    if _model_cache_absent(cache_path):
+        payload = catalog_loader(binding.backend_cli, work_root, timeout_seconds)
+        kind = "bundled"
+        path = profile_dir / "parity" / f"{side}-model-source.json"
+    else:
+        snapshot = _regular_file_snapshot(
+            cache_path, code="parity.model.cache_unsafe", label=f"{side} model cache",
+            max_bytes=MAX_PARITY_CATALOG_BYTES, capture_payload=True,
+        )
+        payload = snapshot.payload
+        kind = "cache"
+        path = cache_path
+    if not isinstance(payload, bytes) or not payload or len(payload) > MAX_PARITY_CATALOG_BYTES:
+        raise ParityValidationError("parity.model.source_invalid", "Model source returned invalid or oversized data.")
+    document = _parse_parity_catalog_source(payload)
+    _known_model_metadata(document, active_model=active_model)
+    return _ModelCatalogSource(
+        reference=ModelCatalogReference(side, kind, path, hashlib.sha256(payload).hexdigest(), binary.sha256),
+        payload=payload, cache_path=cache_path, cache_snapshot=snapshot,
     )
-    assert snapshot.payload is not None
-    document = _parse_parity_catalog_source(snapshot.payload)
-    return snapshot, _known_model_metadata(document, active_model=active_model)
+
+
+def _revalidate_model_source(source: _ModelCatalogSource) -> None:
+    replace(source)
+    if source.cache_snapshot is not None:
+        refreshed = _regular_file_snapshot(
+            source.cache_path, code="parity.model.source_stale", label="model cache",
+            max_bytes=MAX_PARITY_CATALOG_BYTES,
+        )
+        if not _preparation_snapshot_matches(source.cache_snapshot, refreshed):
+            raise ParityValidationError("parity.model.source_stale", "Model cache changed before promotion.")
+    elif not _model_cache_absent(source.cache_path):
+        raise ParityValidationError("parity.model.source_stale", "A model cache appeared after bundled evidence was selected.")
+    if source.staged_path is not None:
+        _read_private_staged_payload(
+            staging_root=source.staged_path.parent, staged_path=source.staged_path,
+            expected_name=source.reference.path.name, expected_payload=source.payload,
+        )
 
 
 def _source_catalog_from_candidate(
@@ -7917,7 +8147,7 @@ def _source_catalog_from_candidate(
     ):
         # All candidates prepared before policy 4 required explicit catalogs.
         source_kind = "custom"
-    if not isinstance(source_kind, str) or source_kind not in {"custom", "runtime-cache"}:
+    if not isinstance(source_kind, str) or source_kind not in {"custom", "runtime-cache", "runtime-bundled"}:
         raise ParityValidationError(
             "parity.preparation.config_invalid",
             "Managed parity overlay has invalid model-source kind provenance.",
@@ -7930,7 +8160,17 @@ def _source_catalog_from_candidate(
             "parity.preparation.config_invalid",
             "Managed default model cache does not match the internal Runtime Binding.",
         )
+    if (
+        source_kind == "runtime-bundled"
+        and source_catalog != config_inputs.profile_config.parent / "parity" / "internal-model-source.json"
+    ):
+        raise ParityValidationError(
+            "parity.preparation.config_invalid", "Managed bundled model source is not profile-local.",
+        )
     _validate_catalog_kind_receipt(candidate, source_catalog, source_kind)
+    if source_kind != "custom":
+        # A new update selects current cache/binary evidence, not the old dump.
+        return candidate.internal_binding.codex_home / "models_cache.json", False
     return source_catalog, source_kind == "custom"
 
 
@@ -7976,6 +8216,32 @@ def _validate_catalog_kind_receipt(
     custom = [f for f in findings if f.get("code") == "parity.model.custom_catalog_not_applicable"]
     legacy_custom_only = document.get("policy_version") in {"1", "2", "3"}
     expected_kind = "custom" if custom or legacy_custom_only else "runtime-cache"
+    if (custom or legacy_custom_only) and document.get("model_sources"):
+        raise ParityValidationError(code, "Custom catalog receipt carries default model sources.")
+    if not custom and not legacy_custom_only and (
+        document.get("policy_version") != "4" or "model_sources" in document
+    ):
+        sources = _parse_model_catalog_references(document.get("model_sources"))
+        if len(sources) != 2 or {source.side for source in sources} != {"official", "internal"}:
+            raise ParityValidationError(code, "Model-source receipt has invalid source metadata.")
+        source = next(source for source in sources if source.side == "internal")
+        official_source = next(source for source in sources if source.side == "official")
+        official = document.get("official_reference")
+        if (
+            source.path != source_catalog
+            or source.sha256 != internal.get("source_catalog_sha256")
+            or source.binary_sha256 != internal.get("binary_sha256")
+            or not isinstance(official, Mapping)
+            or official_source.binary_sha256 != official.get("binary_sha256")
+        ):
+            raise ParityValidationError(code, "Model-source receipt has inconsistent source metadata.")
+        expected_kind = "runtime-" + source.kind
+        if source.kind == "bundled":
+            original = _regular_file_snapshot(
+                source.path, code=code, label="recorded bundled model source", max_bytes=MAX_PARITY_CATALOG_BYTES,
+            )
+            if original.sha256 != source.sha256:
+                raise ParityValidationError(code, "Recorded bundled model source changed.")
     if (
         source_kind != expected_kind
         or (custom and (
@@ -8103,12 +8369,12 @@ def _config_identity(
         auth_source_kind = "openai"
     else:
         auth_source_kind = "unspecified"
-    source_snapshot = _regular_file_snapshot(
-        source_catalog,
-        code="parity.overlay.source_unsafe",
-        label="source model catalog" if custom_model_catalog else "internal model cache",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-    )
+    source_snapshot = None
+    if custom_model_catalog:
+        source_snapshot = _regular_file_snapshot(
+            source_catalog, code="parity.overlay.source_unsafe",
+            label="source model catalog", max_bytes=MAX_PARITY_CATALOG_BYTES,
+        )
     return _ParityConfigIdentity(
         active_model=active_model,
         provider_id=provider_id,
@@ -8116,7 +8382,7 @@ def _config_identity(
         endpoint_sha256=hashlib.sha256(base_url.encode("utf-8")).hexdigest(),
         auth_source_kind=auth_source_kind,
         source_catalog=source_catalog,
-        source_catalog_sha256=source_snapshot.sha256,
+        source_catalog_sha256=source_snapshot.sha256 if source_snapshot is not None else None,
         custom_model_catalog=custom_model_catalog,
     )
 
@@ -8200,8 +8466,11 @@ def _revalidate_preparation_fingerprints(
     internal_binary: _RegularFileSnapshot,
     overlay: ParityOverlayArtifact,
     official_model_cache: _RegularFileSnapshot | None,
+    model_sources: tuple[_ModelCatalogSource, ...],
     internal_schema_sha256: str,
 ) -> None:
+    for source in model_sources:
+        _revalidate_model_source(source)
     if official_model_cache is not None:
         refreshed = _regular_file_snapshot(
             official_model_cache.path,
@@ -8248,23 +8517,24 @@ def _revalidate_preparation_fingerprints(
             "Internal binary identity changed during parity preparation.",
         )
 
-    refreshed_source_catalog = _regular_file_snapshot(
-        overlay.source_catalog,
-        code="parity.preparation.candidate_stale",
-        label="source model catalog",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-    )
-    if (
-        refreshed_source_catalog.sha256
-        != overlay.source_catalog_sha256
-        or refreshed_source_catalog.mode != overlay.source_mode
-        or refreshed_source_catalog.device != overlay.source_device
-        or refreshed_source_catalog.inode != overlay.source_inode
-    ):
-        raise ParityValidationError(
-            "parity.preparation.candidate_stale",
-            "Source model catalog changed during parity preparation.",
+    if not any(source.reference.side == "internal" and source.reference.kind == "bundled" for source in model_sources):
+        refreshed_source_catalog = _regular_file_snapshot(
+            overlay.source_catalog,
+            code="parity.preparation.candidate_stale",
+            label="source model catalog",
+            max_bytes=MAX_PARITY_CATALOG_BYTES,
         )
+        if (
+            refreshed_source_catalog.sha256
+            != overlay.source_catalog_sha256
+            or refreshed_source_catalog.mode != overlay.source_mode
+            or refreshed_source_catalog.device != overlay.source_device
+            or refreshed_source_catalog.inode != overlay.source_inode
+        ):
+            raise ParityValidationError(
+                "parity.preparation.candidate_stale",
+                "Source model catalog changed during parity preparation.",
+            )
 
     source_config = candidate.source_config
     if not isinstance(source_config, ConfigInputs):
@@ -8310,6 +8580,7 @@ def prepare_parity_bundle(
     _version_loader: Callable[[Path, float], str] | None = None,
     _feature_runner: FeatureRunner | None = None,
     _probe_runner: ParityProbeRunner | None = None,
+    _catalog_loader: Callable[[Path, Path, float], bytes] | None = None,
 ) -> ParityBundle:
     if not isinstance(candidate, ParityCandidate):
         raise ParityValidationError(
@@ -8329,7 +8600,8 @@ def prepare_parity_bundle(
         )
     )
     version_loader = _version_loader or _load_cli_version
-    if not callable(schema_loader) or not callable(version_loader):
+    catalog_loader = _catalog_loader or _dump_bundled_model_catalog
+    if not callable(schema_loader) or not callable(version_loader) or not callable(catalog_loader):
         raise ParityValidationError(
             "parity.preparation.runner_invalid",
             "Parity preparation runner is invalid.",
@@ -8343,11 +8615,53 @@ def prepare_parity_bundle(
     artifact_paths = resolve_parity_artifact_paths(
         profile_dir=candidate.source_config.profile_config.parent
     )
-    overlay = prepare_parity_overlay(
-        source_catalog=config_identity.source_catalog,
-        expected_source_sha256=config_identity.source_catalog_sha256,
-        active_model_slug=config_identity.active_model,
+    official_binary = _regular_file_snapshot(
+        candidate.official_binding.backend_cli, code="parity.reference.binary_invalid",
+        label="official bundled CLI", executable=True,
     )
+    internal_binary = _regular_file_snapshot(
+        candidate.internal_binding.backend_cli, code="parity.internal.binary_invalid",
+        label="internal backend CLI", executable=True,
+    )
+    model_sources: tuple[_ModelCatalogSource, ...] = ()
+    official_model_cache = None
+    official_model_metadata: Mapping[str, object] = {}
+    if not config_identity.custom_model_catalog:
+        model_sources = tuple(_load_default_model_source(
+            side=side, binding=binding, binary=binary,
+            profile_dir=candidate.source_config.profile_config.parent,
+            active_model=config_identity.active_model, work_root=canonical_work_root,
+            timeout_seconds=timeouts.command_seconds,
+            catalog_loader=catalog_loader,
+        ) for side, binding, binary in (
+            ("internal", candidate.internal_binding, internal_binary),
+            ("official", candidate.official_binding, official_binary),
+        ))
+        internal_source, official_source = model_sources
+        config_identity = replace(
+            config_identity, source_catalog=internal_source.reference.path,
+            source_catalog_sha256=internal_source.reference.sha256,
+        )
+        official_model_cache = official_source.cache_snapshot
+        official_model_metadata = _known_model_metadata(
+            _parse_parity_catalog_source(official_source.payload), active_model=config_identity.active_model,
+        )
+    if model_sources and model_sources[0].reference.kind == "bundled":
+        with tempfile.TemporaryDirectory(prefix="model-overlay-", dir=str(canonical_work_root)) as temporary:
+            source_path = Path(temporary) / "source.json"
+            _write_private_staged_payload(source_path, model_sources[0].payload)
+            overlay = prepare_parity_overlay(
+                source_catalog=source_path,
+                expected_source_sha256=config_identity.source_catalog_sha256,
+                active_model_slug=config_identity.active_model,
+            )
+            overlay = replace(overlay, source_catalog=config_identity.source_catalog)
+    else:
+        overlay = prepare_parity_overlay(
+            source_catalog=config_identity.source_catalog,
+            expected_source_sha256=config_identity.source_catalog_sha256,
+            active_model_slug=config_identity.active_model,
+        )
     config_projection = prepare_parity_config_projection(
         config_inputs=candidate.source_config,
         overlay_path=artifact_paths.overlay_path,
@@ -8377,31 +8691,12 @@ def prepare_parity_bundle(
     active_runtime_payload = (
         runtime_payload if active_runtime_path is not None else None
     )
-    official_model_cache = None
-    official_model_metadata: Mapping[str, object] = {}
-    if not config_identity.custom_model_catalog:
-        official_model_cache, official_model_metadata = _model_cache_snapshot(
-            candidate.official_binding.codex_home / "models_cache.json",
-            active_model=config_identity.active_model,
-        )
     overlay_document = _parse_parity_catalog_source(
         overlay.overlay_payload
     )
     internal_model_metadata = _known_model_metadata(
         overlay_document,
         active_model=config_identity.active_model,
-    )
-    official_binary = _regular_file_snapshot(
-        candidate.official_binding.backend_cli,
-        code="parity.reference.binary_invalid",
-        label="official bundled CLI",
-        executable=True,
-    )
-    internal_binary = _regular_file_snapshot(
-        candidate.internal_binding.backend_cli,
-        code="parity.internal.binary_invalid",
-        label="internal backend CLI",
-        executable=True,
     )
     official_schema_payload = schema_loader(
         candidate.official_binding.backend_cli,
@@ -8583,6 +8878,7 @@ def prepare_parity_bundle(
             internal_binary=internal_binary,
             overlay=overlay,
             official_model_cache=official_model_cache,
+            model_sources=model_sources,
             internal_schema_sha256=internal_schema_sha256,
         )
         typed_probe_result = next(
@@ -8702,6 +8998,7 @@ def prepare_parity_bundle(
             for result in probe_report.results
         ),
         policy_evaluation=final_policy_evaluation,
+        model_sources=tuple(source.reference for source in model_sources),
     )
     bundle = prepare_parity_bundle_artifacts(
         receipt=receipt,
@@ -8716,13 +9013,22 @@ def prepare_parity_bundle(
         runtime_payload,
         overlay_path=bundle.staged_overlay_path,
     )
+    model_sources = tuple(
+        replace(source, staged_path=bundle.staging_root / source.reference.path.name)
+        if source.reference.kind == "bundled" else source
+        for source in model_sources
+    )
     extended_paths = (
         staged_runtime_config_path,
         staged_capability_receipt_path,
         bundle.staged_receipt_path,
         bundle.staged_overlay_path,
+        *(source.staged_path for source in model_sources if source.staged_path is not None),
     )
     try:
+        for source in model_sources:
+            if source.staged_path is not None:
+                _write_private_staged_payload(source.staged_path, source.payload)
         _write_private_staged_payload(
             staged_runtime_config_path,
             staged_runtime_config_payload,
@@ -8758,6 +9064,7 @@ def prepare_parity_bundle(
             staged_capability_receipt_payload=capability_artifact.payload,
             candidate=candidate,
             official_model_cache=official_model_cache,
+            model_sources=model_sources,
         )
         revalidate_parity_bundle_inputs(prepared)
         return prepared
@@ -8856,22 +9163,23 @@ def _revalidate_parity_bundle_inputs(
             "parity.bundle.reference_stale",
             "Official bundle identity changed before promotion.",
         )
-    source_catalog = _regular_file_snapshot(
-        bundle.overlay.source_catalog,
-        code="parity.bundle.candidate_stale",
-        label="source model catalog",
-        max_bytes=MAX_PARITY_CATALOG_BYTES,
-    )
-    if (
-        source_catalog.sha256 != bundle.overlay.source_catalog_sha256
-        or source_catalog.mode != bundle.overlay.source_mode
-        or source_catalog.device != bundle.overlay.source_device
-        or source_catalog.inode != bundle.overlay.source_inode
-    ):
-        raise ParityValidationError(
-            "parity.bundle.candidate_stale",
-            "Source model catalog changed before promotion.",
+    if not any(source.reference.side == "internal" and source.reference.kind == "bundled" for source in bundle.model_sources):
+        source_catalog = _regular_file_snapshot(
+            bundle.overlay.source_catalog,
+            code="parity.bundle.candidate_stale",
+            label="source model catalog",
+            max_bytes=MAX_PARITY_CATALOG_BYTES,
         )
+        if (
+            source_catalog.sha256 != bundle.overlay.source_catalog_sha256
+            or source_catalog.mode != bundle.overlay.source_mode
+            or source_catalog.device != bundle.overlay.source_device
+            or source_catalog.inode != bundle.overlay.source_inode
+        ):
+            raise ParityValidationError(
+                "parity.bundle.candidate_stale",
+                "Source model catalog changed before promotion.",
+            )
     if include_config_sources:
         for path, expected_sha256 in (
             bundle.config_projection.config_inputs.sources

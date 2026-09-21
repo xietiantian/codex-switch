@@ -1,12 +1,14 @@
 # Task Ledger
 
-## Completed Correction: Custom Model Catalog Parity
+## Active Cache-Free Correction: Custom Model Catalog Parity
 
-- Reopened on 2026-09-21 following requester clarification: absent catalog must
+- Reopened again on 2026-09-21 after a missing-cache update failure. Section 5
+  addresses cache-free runtime evidence; section 4 remains historical delivery.
+- Previously reopened on 2026-09-21 following requester clarification: absent catalog must
   retain ordinary metadata comparison through the full update preparation path.
 - Original archive was byte-preserving, but full-path acceptance was incomplete.
-- Execution source: openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md, section 4.
-- Baseline 3a32b4e. Scope, public seams, write set, tests and review contracts are
+- Execution source: openspec/changes/respect-custom-model-catalog/tasks.md, section 5.
+- Section 5 baseline 1019312 (section 4 baseline 3a32b4e). Scope, public seams, write set, tests and review contracts are
   in that change’s correction addendum. No live installation/provider/desktop
   mutation; existing PR commit/push and isolated package refresh remain authorized.
 - Other four completed PR repairs remain archived. The unused new-change scaffold
@@ -16,6 +18,18 @@
   Re-archived at the original location after full isolated regression, two-axis
   review, previous-to-candidate package upgrade and 17 installed-module tests.
   Stable local test entrypoint selects the verified package. No live installation.
+- Section 5 implementation now uses valid caches or bounded corresponding-binary
+  bundled exports only when caches are absent. Policy 5 requires two binary-bound
+  source references for default receipts. Source snapshots use the existing
+  publication/rollback transaction. Genuine policy 4 provenance is re-prepared.
+- RED/GREEN: missing caches, unrecognized transaction roles, and omitted current
+  receipt provenance. Both review axes closed the provenance P2 after negative
+  regressions; Spec also closed stale repeat-source wording. Focused 33, parity
+  107, current-runtime 5 and transaction 257/258 (one existing skip) pass.
+  Native complete preparation with real runtimes and a loopback provider passes
+  both probes without a cache or injected model/schema/feature/probe loader.
+  Profile, committed-package and delivery completion are recorded in the
+  verification record before section 5 is marked complete.
 - Across the five PR repairs, 43 tasks are complete and the synchronized main
   specs retain 13 requirements and 42 scenarios. Historical counts below describe
   the original archive before this correction.

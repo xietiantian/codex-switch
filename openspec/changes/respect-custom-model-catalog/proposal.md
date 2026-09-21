@@ -33,3 +33,5 @@ official metadata therefore block otherwise compatible candidates.
 Parity preparation/evaluation/evidence, isolated tests, and public usage docs.
 No new dependency, command-line flag, live installation, cache mutation,
 provider request, release, or change to installer/profile capture sequencing.
+
+Latest correction: absent default caches use complete offline catalogs exported by the corresponding runtimes, with durable source provenance and transactional snapshots. Present invalid caches still fail.

@@ -1,0 +1,12 @@
+{
+  "baseline": "1019312",
+  "goal": "Review cache-free default model preparation, offline exports and transactional source provenance in the reopened original change.",
+  "agents": [
+    {"id": "catalog_routing_spec", "scope": "Spec behavior, cache/custom precedence, source integrity and rollback", "write_set": []},
+    {"id": "catalog_routing_standards", "scope": "Repository standards, robustness, isolation and code smells", "write_set": []}
+  ],
+  "constraints": ["read-only", "no live runtime or installed-state changes", "Python -B for isolated tests", "no scope expansion", "cite concrete lines and severity"],
+  "verification": "git diff 1019312 plus untracked bundled-source tests; the original change section 5 is the execution contract.",
+  "evidence": ".planning/devflow/verification/respect-custom-model-catalog.md",
+  "human_gate": "Existing authorization covers repair, isolated tests and PR delivery; release and live workstation mutation are excluded."
+}

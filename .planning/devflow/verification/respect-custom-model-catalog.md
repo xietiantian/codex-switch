@@ -136,3 +136,87 @@ research; no automatic cleanup or deletion is authorized by this contract.
 - Live installed state, model/cache/config contents and Desktop processes were
   not changed. Missing default caches still fail: this correction restores the
   comparison branch, rather than manufacturing evidence or bypassing checks.
+
+
+## Second reopened correction: absent default caches
+
+Baseline 1019312; the original change section 5 remains the execution source.
+The cache-only correction did not cover a legitimate cache-free runtime home.
+No Python bytecode cleanup can satisfy this missing model-data input. The scope
+is ordinary source selection; explicit custom catalogs retain their exemption.
+The existing authorization covers implementation, isolated testing, PR updates
+and original-change archive after completion. Live installation/config changes,
+Desktop activation and external provider calls remain excluded.
+
+### RED / GREEN and behavior
+
+- Complete preparation with both caches absent failed with the reported model
+  cache inspection error before the change; the same seam now succeeds using
+  each corresponding binary's offline full model catalog.
+- The transaction rejected new source snapshot roles before the role/path allowlist
+  update. Publication plus crash recovery after either source and after manifest
+  activation now restore the old bundle, including prior/absent source files.
+- Both review axes found that current receipts could omit model_sources. Two
+  regression tests first failed, then passed with mandatory two-sided provenance.
+  Missing/empty sources, repeat-update tampering and either binary digest mismatch
+  are rejected. Genuine policy 4 cache provenance is re-prepared under policy 5.
+- A present unsafe/malformed cache never falls back. Missing caches alone select
+  bundled exports. Export failure, timeout, output overflow, invalid JSON, absent
+  active model, newly appearing cache and source/binary drift remain blocking.
+- Repeated updates validate recorded origin and select fresh cache/binary evidence;
+  managed default overlays never acquire custom-catalog applicability.
+- Exports run with private CODEX_HOME/cwd, file credential storage and a whitelisted
+  environment without credentials. Output/process bounds use existing primitives.
+  User cache/config files are not created by collection.
+
+### Independent review
+
+Contract: default-model-review.contract.json, read-only axes at baseline 1019312.
+Spec closed the receipt P2 and a P3 stale runtime-cache-only scenario after fixes.
+Standards independently closed the same P2; no other actionable smell or correctness
+finding remained. Each independently reran focused tests. The main spec now matches
+both original requirements and all fifteen scenarios; previous scenarios were
+preserved and four cache-free scenarios added. Pinned OpenSpec 1.7 returned valid
+spec instructions with no additional rules before this sync.
+
+### Native full-preparation evidence
+
+The actual Desktop bundled CLI 0.155.0-alpha.9.2 and candidate CLI 0.155.0 were used
+in temporary homes with no default cache, no custom catalog and no copied credentials.
+An isolated loopback Responses fixture supplied deterministic completion events.
+The production prepare_parity_bundle path used actual offline model exports,
+version/features, schemas, capability probing, core protocol and typed-v2 probes;
+no loader/probe substitution was used. Both probes passed, complete preparation
+and immutable/input revalidation succeeded, and no model cache was generated.
+Both exports contain nine complete model entries including tool_mode; model/list
+would omit that field. The thirteen previously classified optional differences
+remain informational. No live promotion, Desktop UI session or external provider
+behavior is claimed. Private logs use local/default-model-* and are retained.
+
+### Validation before committed-package delivery
+
+- Bundled-source tests: 17 passed; existing model routing: 16 passed.
+- Parity: 107 passed; current runtime: 5 passed.
+- Transaction: 258 cases, 257 passed and one existing skip.
+- Python 3.9 AST grammar, shell syntax and diff whitespace passed.
+- Pinned OpenSpec 1.7 strict validation: 28 items passed before re-archive.
+- An initial transaction invocation used a nonexistent filename and ran no tests;
+  the corrected test_codex_transaction.py invocation produced the results above.
+- Profile regression and exact committed package are recorded below when complete.
+
+### Generated artifact and transport contract
+
+Owner: primary cache-free correction run. Allocate absent
+local/default-model-package for git-archive source, distribution, isolated install
+roots and logs. Build the exact implementation commit, upgrade from the previous
+PR package using explicit file URLs/install/lib roots, run installed-module checks
+with bytecode disabled, then validate package/archive/installed manifests again.
+Refresh the existing private test entrypoint only from those verified bytes.
+Retain artifacts and unrelated research. No live install, shell startup mutation,
+cleanup or release publication is authorized by this operation.
+
+Native git ls-remote read back the expected fork branch at baseline 1019312.
+The repository has no git_transport_preflight.py; native transport is the bounded
+fallback, independent of the separately checked GitHub PR control plane.
+
+- Fresh profile regression completed: 227/227 passed in 292.658 seconds with an isolated shell-profile path. Section 5.1-5.3 verification and review are complete; only committed-package delivery and archive remain.

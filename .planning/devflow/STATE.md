@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: complete
+current_stage: validation_delivery
 
 current_change:
   id: respect-custom-model-catalog
-  status: completed
+  status: reopened
 
 standing_milestone:
   status: inactive
@@ -33,7 +33,7 @@ gates:
   implementation_done: true
   verification_passed: true
   state_updated: true
-  archive_allowed: true
+  archive_allowed: false
   release_allowed: false
 
 implementation_readiness:
@@ -71,7 +71,7 @@ context_management:
 goal_gate:
   id: respect-custom-model-catalog
   required: true
-  status: satisfied
+  status: in_progress
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
@@ -86,7 +86,15 @@ context_health:
 
 # Workflow State
 
-## Completed Original-Change Correction
+## Active Cache-Free Correction
+
+Section 5 source and native verification are complete: 145 parity/source/current
+tests, 227 profile tests, 257 transaction tests plus one existing skip; both
+review axes are closed. Real cache-free complete preparation passes both native
+probes in isolation. Committed-package verification and PR delivery remain.
+Historical delivery follows.
+
+## Previous Original-Change Correction
 
 The original respect-custom-model-catalog change was reopened to restore the
 complete catalog-free comparison path. Implementation 9d0c8e2 is pushed to PR #1;
@@ -133,6 +141,4 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-No implementation work remains in the correction contract. PR #1 and the verified
-local test entrypoint are the delivery surfaces; release publication and live
-workstation installation are separate actions, not performed by this repair.
+Complete section 5.4: verify exact committed package, push existing PR, refresh the stable test entrypoint, and re-archive the synchronized original change.

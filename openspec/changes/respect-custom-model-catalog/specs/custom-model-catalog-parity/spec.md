@@ -41,7 +41,7 @@ catalogs and SHALL preserve runtime compatibility and source integrity checks.
 
 #### Scenario: Missing catalog uses default model comparison
 - **WHEN** the profile has no model_catalog_json key
-- **THEN** preparation uses the internal runtime model cache and official reference cache
+- **THEN** preparation selects each runtime model source from a valid cache or, when absent, its offline bundled catalog
 - **AND** metadata differences pass through the existing comparison policy
 - **AND** runtime compatibility and behavior probes remain required.
 
@@ -49,15 +49,34 @@ catalogs and SHALL preserve runtime compatibility and source integrity checks.
 - **WHEN** an explicit catalog is empty, non-string, unsafe, malformed or lacks the active model
 - **THEN** preparation rejects that configuration without treating it as absent.
 
-#### Scenario: Default model evidence is missing or changed
-- **WHEN** either required runtime cache is missing, unsafe, malformed or changes during preparation or before promotion
+#### Scenario: Default model evidence is invalid or changed
+- **WHEN** a present runtime cache is unsafe or malformed, an absent cache cannot be replaced by valid bundled evidence, or selected evidence changes during preparation or before promotion
 - **THEN** preparation or revalidation fails without changing the bound binary or original configuration.
 
 #### Scenario: Managed default overlay remains comparable
-- **WHEN** a default-cache candidate is prepared again from its managed overlay
-- **THEN** its recorded runtime-cache origin is retained and official comparison still runs
+- **WHEN** a default-model candidate is prepared again from its managed overlay
+- **THEN** its default-model origin is retained and official comparison still runs, selecting cache or bundled evidence again for each runtime
 - **AND** invalid or missing current-policy source-kind provenance is rejected.
 
 #### Scenario: Legacy custom provenance remains usable
 - **WHEN** an older custom-only manifest has no source-kind field
 - **THEN** preparation resolves its original custom catalog and regenerates current-policy evidence.
+
+#### Scenario: Missing default caches use corresponding bundled catalogs
+- **WHEN** either or both default runtime caches are absent and the corresponding binary supports an offline complete model export
+- **THEN** preparation compares that binary's exported metadata with the other selected runtime source
+- **AND** user cache/configuration files are not created or changed by collection.
+
+#### Scenario: Export failure never bypasses comparison
+- **WHEN** offline export is unsupported, fails, times out, exceeds output bounds, is malformed or lacks the active model
+- **THEN** preparation fails before promotion without substituting the other runtime's catalog or partial model-list fields.
+
+#### Scenario: Bundled evidence survives transactional publication
+- **WHEN** bundled default sources pass all compatibility and behavior checks
+- **THEN** their snapshots and binary-bound provenance publish with the existing transaction
+- **AND** rollback restores the prior source artifacts together with the bound binary and configuration.
+
+#### Scenario: Repeated default updates collect current evidence
+- **WHEN** a generated overlay originated from a cache or bundled default source
+- **THEN** a later update validates its origin and selects fresh evidence from current caches or corresponding binaries
+- **AND** the overlay is never reclassified as an explicit custom catalog.

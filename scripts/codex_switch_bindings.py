@@ -917,6 +917,9 @@ def cmd_set_bin(
                 )
             )
             artifacts = [
+                *(RuntimeBindingTextArtifact(
+                    role=f"parity_{side}_model_source", path=path, payload=payload, mode=0o600,
+                ) for side, path, payload in getattr(parity_bundle, "model_source_artifacts", ())),
                 RuntimeBindingTextArtifact(
                     role="parity_overlay",
                     path=(
