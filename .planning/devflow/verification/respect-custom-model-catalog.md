@@ -107,3 +107,32 @@ artifact roots may additionally receive source/distribution copies named for the
 same commit. Do not use installed workstation paths, change shell startup files,
 or call a provider/Desktop runtime. Retain all artifacts and unrelated local
 research; no automatic cleanup or deletion is authorized by this contract.
+
+## Correction delivery and archive
+
+- Implementation 9d0c8e2 was archived with git archive and built using the existing
+  release packager. In fresh isolated install/lib roots, the previous PR package
+  installed and upgraded successfully to the candidate. All 16 routing tests and
+  the real-backpressure regression passed against installed modules (17/17).
+  Distribution, archive and post-test installed manifests validate, with no .pyc
+  files in the source or installed bundle.
+- OpenSpec 1.7 strict validation passed all 28 active/spec items after main-spec
+  sync; Python 3.9 grammar and diff checks passed. Both independent review axes
+  have no open findings. Full provider-backed Desktop UI behavior is not claimed
+  by deterministic preparation fixtures or temporary installation tests.
+- Native git ls-remote preflight found the expected 3a32b4e PR head. The named
+  preflight helper was not available in the repository or installed skill roots;
+  direct native transport was used. Push succeeded and GitHub readback confirmed
+  PR #1 at 9d0c8e2. The stable local test entrypoint now selects the exact verified
+  source/archive; its Bash syntax and copied archive manifest passed validation.
+- Tasks 4.1-4.4 are complete. The requester previously authorized archiving
+  completed PR changes and selected correction of this original change. Reuse
+  its original archive location after verifying all two requirements and eleven
+  scenarios match the main spec; preserve the original history and this correction.
+- Re-archive completed at the original location. Fresh post-archive OpenSpec 1.7
+  validation passed 27/27 items; Bash syntax and diff checks passed. Across the
+  five PR repairs, 43 completed tasks, 13 requirements and 42 scenarios reconcile.
+  This final evidence/archive update changes no packaged runtime or README bytes.
+- Live installed state, model/cache/config contents and Desktop processes were
+  not changed. Missing default caches still fail: this correction restores the
+  comparison branch, rather than manufacturing evidence or bypassing checks.

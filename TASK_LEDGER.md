@@ -1,16 +1,24 @@
 # Task Ledger
 
-## Active Reopened Repair: Custom Model Catalog Parity
+## Completed Correction: Custom Model Catalog Parity
 
 - Reopened on 2026-09-21 following requester clarification: absent catalog must
   retain ordinary metadata comparison through the full update preparation path.
 - Original archive was byte-preserving, but full-path acceptance was incomplete.
-- Execution source: openspec/changes/respect-custom-model-catalog/tasks.md, section 4.
+- Execution source: openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md, section 4.
 - Baseline 3a32b4e. Scope, public seams, write set, tests and review contracts are
   in that change’s correction addendum. No live installation/provider/desktop
   mutation; existing PR commit/push and isolated package refresh remain authorized.
 - Other four completed PR repairs remain archived. The unused new-change scaffold
   is retained under local verification artifacts; it is not an active change.
+- Correction delivered as 9d0c8e2 to PR #1. All 12 tasks in this original change
+  are complete; two requirements and eleven scenarios match the main spec.
+  Re-archived at the original location after full isolated regression, two-axis
+  review, previous-to-candidate package upgrade and 17 installed-module tests.
+  Stable local test entrypoint selects the verified package. No live installation.
+- Across the five PR repairs, 43 tasks are complete and the synchronized main
+  specs retain 13 requirements and 42 scenarios. Historical counts below describe
+  the original archive before this correction.
 - Incidental finding PROBE-DEADLINE-FIXTURE-2026-09-21:
   CONTINUE_WITH_MINIMAL_GUARD. The existing backpressure fixture's 0.5-second
   budget includes cold Python startup and three handshakes; observed core startup
@@ -66,7 +74,7 @@
 
 - Approved: skip official-model comparison for validated custom catalogs,
   preserve runtime/source checks, isolate verification, and update PR #1.
-- Execution source: `openspec/changes/respect-custom-model-catalog/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md`.
 - Baseline: 9c9bc73; scope and write set are recorded in that change's design.
 - Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
 - Status: implementation, isolated regressions, package validation and both

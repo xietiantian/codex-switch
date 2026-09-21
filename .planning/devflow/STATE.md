@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: complete
 
 current_change:
   id: respect-custom-model-catalog
-  status: reopened
+  status: completed
 
 standing_milestone:
   status: inactive
@@ -31,9 +31,9 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
-  archive_allowed: false
+  archive_allowed: true
   release_allowed: false
 
 implementation_readiness:
@@ -71,7 +71,7 @@ context_management:
 goal_gate:
   id: respect-custom-model-catalog
   required: true
-  status: in_progress
+  status: satisfied
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
@@ -79,20 +79,28 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: verify_reopened_catalog_routing
+  last_decision: archive_verified_catalog_routing_correction
   last_goal_status: aligned
   goal_summary: Restore catalog-free comparison while preserving custom-source applicability and integrity.
 ---
 
 # Workflow State
 
-## Reopened Correction
+## Completed Original-Change Correction
 
-The custom-catalog change has returned to the active changes directory. Its
-original evidence remains historical; tasks 4.1 and 4.2 are complete. Routing,
-parity/current, profile and transaction regressions pass; both review axes have
-no open findings. Exact committed-package verification and delivery remain before
-any new completion/archive claim. The four other repairs stay archived.
+The original respect-custom-model-catalog change was reopened to restore the
+complete catalog-free comparison path. Implementation 9d0c8e2 is pushed to PR #1;
+its exact archive passed an isolated previous-package upgrade, 17 installed-module
+tests and post-test manifest validation without bytecode residue. Routing and
+parity/current suites (128), profile (227) and transaction cases (257 passed,
+one existing skip) pass. Independent Spec/Standards reviews have no open findings.
+The stable local test entrypoint selects the verified package. No live installation,
+provider call or Desktop/config/cache mutation occurred.
+
+All 12 tasks in the original change are complete. Its two requirements and eleven
+scenarios match the main spec. Re-archive returns it to the original location;
+the other four PR repairs remain archived. Across these repairs there are now
+43 completed tasks, 13 requirements and 42 scenarios.
 
 ## Previous Archive Record
 
@@ -105,8 +113,8 @@ The five changes introduced by PR #1 are archived under
 - support-namespaced-feature-keys
 - classify-current-runtime-extensions
 
-All 39 tasks are complete. Main capability specs retain all 13 requirements
-and 37 scenarios. Existing verification and independent review records remain
+At the original archive, all 39 tasks were complete and main capability specs
+retained all 13 requirements and 37 scenarios. Existing verification and independent review records remain
 valid for the unchanged implementation. Archive authorization and fresh
 specification validation are recorded in
 `.planning/devflow/verification/archive-pr-fixes.md`.
@@ -125,7 +133,6 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Verify the exact implementation package in isolated install/lib roots, then
-push the correction to PR #1 and refresh the local test entrypoint. Complete
-section 4 and re-archive the same change only after these gates pass. Release publication and workstation installation remain separate
-authorization boundaries.
+No implementation work remains in the correction contract. PR #1 and the verified
+local test entrypoint are the delivery surfaces; release publication and live
+workstation installation are separate actions, not performed by this repair.
