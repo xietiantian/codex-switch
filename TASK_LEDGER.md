@@ -1,10 +1,22 @@
 # Task Ledger
 
-## Active Repair: Current Runtime Optional Extensions
+## Completed PR Repair Archive
+
+- Authorized on 2026-09-21: archive the five completed changes introduced by PR #1,
+  synchronize their capability specs, and update the existing PR.
+- All 39 implementation tasks and the existing isolated verification/review
+  contracts are complete. The subsequent current-runtime repair resolves the
+  separate feature/protocol findings recorded by the earlier grammar repair.
+- Archive location: `openspec/changes/archive/2026-09-21-<change-name>/` for the
+  five repairs listed below. Main specs preserve all 13 requirements and 37 scenarios.
+- Evidence: `.planning/devflow/verification/archive-pr-fixes.md`.
+- Runtime source code is unchanged by the documentation-only archive.
+
+## Archived Repair: Current Runtime Optional Extensions
 
 - Approved: precise optional classification plus isolated core-path verification,
   with commit/push to existing PR #1; baseline 59cfe33.
-- Execution source: `openspec/changes/classify-current-runtime-extensions/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-classify-current-runtime-extensions/tasks.md`.
 - Scope/evidence: that change’s design and `.planning/devflow/verification/classify-current-runtime-extensions.md`.
 - Status: exact classification and native probes implemented; 112 parity/current
   cases, native regression, 227 profile cases and transaction guards pass.
@@ -17,11 +29,11 @@
   The approved core-proof contract requires app-server event and thread/read
   evidence; scope, failure guards and isolation are recorded in the design.
 
-## Active Repair: Namespaced Feature Keys
+## Archived Repair: Namespaced Feature Keys
 
 - Approved: continue the runtime compatibility repair with isolated tests and
   updates to existing PR #1; baseline 250c0ca.
-- Execution source: `openspec/changes/support-namespaced-feature-keys/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-support-namespaced-feature-keys/tasks.md`.
 - Scope: shared feature-name grammar, public-seam regressions and evidence.
 - Evidence: `.planning/devflow/verification/support-namespaced-feature-keys.md`.
 - Status: RED/GREEN, 102 parity and 227 profile cases, native inventory,
@@ -29,11 +41,11 @@
   pushed to PR #1; its verified package and local test runner are refreshed.
 - Feature classifications, live installation and provider requests are excluded.
 
-## Active Repair: Custom Model Catalog Parity
+## Archived Repair: Custom Model Catalog Parity
 
 - Approved: skip official-model comparison for validated custom catalogs,
   preserve runtime/source checks, isolate verification, and update PR #1.
-- Execution source: `openspec/changes/respect-custom-model-catalog/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md`.
 - Baseline: 9c9bc73; scope and write set are recorded in that change's design.
 - Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
 - Status: implementation, isolated regressions, package validation and both
@@ -41,11 +53,11 @@
   description includes custom-catalog applicability and final verification.
 - Live installation, provider requests, and release publication are excluded.
 
-## Active Repair: First Internal Installation
+## Archived Repair: First Internal Installation
 
 - Approved: restore first-install behavior on the existing PR branch, isolated
   verification, and PR update. No live installation or release publication.
-- Execution source: `openspec/changes/restore-first-internal-install/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-restore-first-internal-install/tasks.md`.
 - Scope: public update routing, absent-state candidate preparation, safe first
   publication, tests, and generic public documentation.
 - Evidence: `.planning/devflow/verification/restore-first-internal-install.md`.
@@ -55,10 +67,10 @@
 - Delivered: PR #1 updated; implementation commit e41c134. No release/live install.
 - Historical records and unrelated research remain preserved.
 
-## Active Repair: Standalone Runtime Installation
+## Archived Repair: Standalone Runtime Installation
 
 - Approved: generic package-preserving installer repair, isolated testing, and PR.
-- Execution source: `openspec/changes/support-standalone-installer-runtime/tasks.md`.
+- Execution source: `openspec/changes/archive/2026-09-21-support-standalone-installer-runtime/tasks.md`.
 - Scope: installer adapter, runtime validation/launcher, tests, public docs.
 - Non-goals: installed workstation changes, release publication, unrelated cleanup.
 - Evidence: `.planning/devflow/verification/support-standalone-installer-runtime.md`.

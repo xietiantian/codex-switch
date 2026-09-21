@@ -33,7 +33,7 @@ gates:
   implementation_done: true
   verification_passed: true
   state_updated: true
-  archive_allowed: false
+  archive_allowed: true
   release_allowed: false
 
 implementation_readiness:
@@ -41,8 +41,8 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-21-current-runtime-extensions
-  last_checkpoint_file: .planning/devflow/verification/classify-current-runtime-extensions.md
+  last_checkpoint_id: 2026-09-21-pr-fixes-archive
+  last_checkpoint_file: .planning/devflow/verification/archive-pr-fixes.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
@@ -79,38 +79,29 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: classify_current_runtime_extensions
+  last_decision: archive_completed_pr_repairs
   last_goal_status: aligned
   goal_summary: Classify exact optional differences and verify native core behavior.
 ---
 
 # Workflow State
 
-## Active Repair Status
+## Completed PR Repairs
 
-Exact optional classification and native core verification pass 112 parity/current
-cases, an opt-in real CLI regression, 227 profile cases, transaction guards and
-both independent review axes. Full current inventories have thirteen optional
-queue entries and no errors. Clean package upgrade and nine installed-module
-checks pass. Implementation a645137 is pushed to PR #1 and its verified local
-test entrypoint is refreshed. No live Desktop or external provider validation
-is claimed.
+The five changes introduced by PR #1 are archived under
+`openspec/changes/archive/2026-09-21-<change-name>/`:
 
-Custom-catalog parity correction is approved on the existing PR branch.
-The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
-repair, broad regressions, exact package checks and independent reviews pass.
-The historical migration fixture correction also passes both entrypoint cases.
-Implementation f116f6d and fixture correction 3a92076 are pushed to PR #1;
-its description and remote head were read back successfully.
+- support-standalone-installer-runtime
+- restore-first-internal-install
+- respect-custom-model-catalog
+- support-namespaced-feature-keys
+- classify-current-runtime-extensions
 
-First-install restoration is implemented and passes its 22-case isolated
-command matrix, package/native checks, regressions, and independent review.
-The existing PR is updated with implementation commit e41c134.
-The canonical execution source is restore-first-internal-install/tasks.md.
-
-The standalone installer compatibility repair and isolated verification pass. Its
-OpenSpec tasks and verification record are authoritative for this branch.
-No live installation or release is authorized; isolated tests and a PR are.
+All 39 tasks are complete. Main capability specs retain all 13 requirements
+and 37 scenarios. Existing verification and independent review records remain
+valid for the unchanged implementation. Archive authorization and fresh
+specification validation are recorded in
+`.planning/devflow/verification/archive-pr-fixes.md`.
 
 ## Historical Status
 
@@ -126,8 +117,6 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Await review of the completed namespaced feature repair in PR #1. The local
-test package selects verified implementation a899eed. Further full Desktop
-compatibility work must address the separately recorded feature/protocol
-findings without weakening the current blocking policy.
-Release publication and live installation remain separate.
+Review the documentation-only archive update in PR #1. The five completed
+repairs have no remaining active OpenSpec tasks. Release publication and
+workstation installation remain separate authorization boundaries.

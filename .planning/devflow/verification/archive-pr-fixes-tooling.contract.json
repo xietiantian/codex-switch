@@ -1,0 +1,9 @@
+{
+  "owner": "pr-fixes-archive-2026-09-21",
+  "purpose": "Project-pinned OpenSpec 1.7 archive/status/spec validation",
+  "generated_root": ".planning/devflow/verification/local/archive-pr-fixes-openspec-1.7-cache",
+  "generator": "npm exec --package @fission-ai/openspec@1.7.0",
+  "lifecycle": "RETAIN",
+  "cleanup_authorized": false,
+  "scope": "isolated npm tooling cache; no global install or workstation configuration changes"
+}
