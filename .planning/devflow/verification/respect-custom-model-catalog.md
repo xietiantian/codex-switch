@@ -1,6 +1,6 @@
 # Custom model catalog verification
 
-## Lifecycle correction in progress (2026-09-21)
+## Lifecycle correction completed (2026-09-21)
 
 Baseline 757c0cd; section 6 of the reopened original change is the execution
 source. The requester approved final capture, same-binary preparation and
@@ -26,13 +26,13 @@ Spec reviewer owns the original change's section 6 requirements and lifecycle
 correctness. Standards reviewer owns ENGINEERING_POLICY.md, AGENTS.md and the
 complete code-review smell baseline. Both are read-only; neither may modify
 files, use live configuration or contact a provider. Review scope is the five
-production modules, three test modules, README and lifecycle planning/evidence
+production modules, four test modules, README and lifecycle planning/evidence
 artifacts shown by that diff. Primary owns fixes, tests and final delivery.
 
 Fresh isolation: runtime-binding 90/90 and transaction 257/258 (one existing
 Python 3.9 interpreter skip) passed. Native first/repeated activation, stale
-profile detection and both fresh/existing rollback are being rechecked with
-the final source. Full profile and parity checks run in temporary homes.
+profile detection and fresh/existing/explicit-home rollback pass with final
+source and installed packages. Full profile and parity checks used temporary homes.
 
 ## Lifecycle final source verification (2026-09-21)
 
@@ -45,7 +45,7 @@ the final source. Full profile and parity checks run in temporary homes.
   made all nine pass. Production code and those test expectations were unchanged.
 - Runtime binding: all 90 cases exercised. Two complete artifact-set assertions
   needed the newly required official manifest publication; their expectations
-  now also check the selected official home. The other 88 passed unchanged.
+  now also check the selected official home. The other 88 passed unchanged; both corrected cases passed their focused recheck.
 - Native lifecycle: 4 tests passed (three actual-backend subcases: first setup,
   recaptured active profile, first explicit official home). Each exercises failed
   publication rollback, successful same-binary rebind and two switches. Mutated
@@ -306,3 +306,22 @@ fallback, independent of the separately checked GitHub PR control plane.
   was modified. This follow-up archive/evidence commit changes no runtime bytes.
 
 - Post-archive strict validation: 27 passed, zero failed. Final diff whitespace and public-content boundary checks passed. No production bytes changed after exact-package verification.
+
+## Lifecycle delivery and archive
+
+Implementation fca9287 was committed and packaged from a clean Git archive.
+In private install/lib/home roots, the previous PR package installed and upgraded
+to this package. All 40 installed-module tests passed, including three real
+backend lifecycle scenarios. Post-test distribution, archive and installed
+manifest validation passed, with no Python bytecode residue.
+
+Native Git transport preflight and push to the existing PR branch succeeded.
+The stable requester-owned test entrypoint now selects this exact verified
+implementation. No source/runtime bytes changed during archive.
+
+The original change is re-archived at its existing dated location. All 21 tasks
+are complete, and all three requirements and 22 scenarios match the main spec.
+Standing archive/commit/push authorization was reused; no publication release
+or live installation was performed. The source-review axes are closed, including
+the two adjusted artifact-set assertions. Diagnostics are retained under the
+local/parity-lifecycle- prefix.

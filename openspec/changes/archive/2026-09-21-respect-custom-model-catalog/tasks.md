@@ -32,4 +32,4 @@ Owner/write set/evidence contract: design.md. Evidence:
 - [x] 6.2 Support only absent official runtime configuration with explicit absence evidence and recoverable publication; reject unsafe inputs and races.
 - [x] 6.3 Preserve the parity-prepared profile/runtime projection across first and repeated switches; retain stale-evidence rejection.
 - [x] 6.4 Run isolated lifecycle, drift, rollback, native and broad regressions; complete independent Spec/Standards reviews and synchronize specs.
-- [ ] 6.5 Verify the committed package, push the correction to PR #1, refresh the stable test package and archive the completed original change.
+- [x] 6.5 Verify the committed package, push the correction to PR #1, refresh the stable test package and archive the completed original change.

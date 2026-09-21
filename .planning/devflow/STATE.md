@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: complete
 
 current_change:
   id: respect-custom-model-catalog
-  status: in_progress
+  status: archived
 
 standing_milestone:
   status: inactive
@@ -31,9 +31,9 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
-  archive_allowed: false
+  archive_allowed: true
   release_allowed: false
 
 implementation_readiness:
@@ -71,7 +71,7 @@ context_management:
 goal_gate:
   id: respect-custom-model-catalog
   required: true
-  status: active
+  status: complete
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
@@ -79,20 +79,24 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: verify_parity_lifecycle_correction
+  last_decision: archive_verified_parity_lifecycle_correction
   last_goal_status: aligned
   goal_summary: Preserve verified parity across final capture, rebind and activation with independent homes.
 ---
 
 # Workflow State
 
-## Current Lifecycle Correction
+## Completed Lifecycle Correction
 
-Section 6 of the original change is active. Preparation, home binding,
-transactional missing-config publication and repeated activation are implemented.
-Review-found explicit-home persistence and pre-switch stale-config guards pass
-three native isolated lifecycle scenarios, including rollback. Final regression,
-package verification, review closure and PR delivery remain in progress.
+Section 6 is complete. Source and installed native tests cover recapture,
+rebind, repeated activation, explicit official homes, rollback and drift rejection.
+The 406-case combined regression, 227 profile cases and 90 runtime-binding cases
+are verified; detailed fixture/environment rechecks are preserved in evidence.
+Both review axes are closed. Implementation fca9287 passed a clean package
+upgrade and 40 installed checks with valid manifests and no bytecode residue,
+then was pushed to the existing PR. The stable test entrypoint selects that
+verified implementation. All 21 original-change tasks and synchronized specs
+are re-archived. Historical evidence follows.
 
 ## Completed Cache-Free Correction
 
@@ -153,4 +157,4 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Finish final regression and independent review, verify the exact committed package, update the existing PR and archive the completed original change. Live installation and provider-backed Desktop UI acceptance remain requester actions.
+No implementation tasks remain for this repair. Preserve the verified test entrypoint; live installation and provider-backed Desktop UI acceptance remain requester actions.
