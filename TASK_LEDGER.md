@@ -1,5 +1,26 @@
 # Task Ledger
 
+## Active Reopened Repair: Custom Model Catalog Parity
+
+- Reopened on 2026-09-21 following requester clarification: absent catalog must
+  retain ordinary metadata comparison through the full update preparation path.
+- Original archive was byte-preserving, but full-path acceptance was incomplete.
+- Execution source: openspec/changes/respect-custom-model-catalog/tasks.md, section 4.
+- Baseline 3a32b4e. Scope, public seams, write set, tests and review contracts are
+  in that change’s correction addendum. No live installation/provider/desktop
+  mutation; existing PR commit/push and isolated package refresh remain authorized.
+- Other four completed PR repairs remain archived. The unused new-change scaffold
+  is retained under local verification artifacts; it is not an active change.
+- Incidental finding PROBE-DEADLINE-FIXTURE-2026-09-21:
+  CONTINUE_WITH_MINIMAL_GUARD. The existing backpressure fixture's 0.5-second
+  budget includes cold Python startup and three handshakes; observed core startup
+  reached 0.550 seconds before the typed fixture could run. Increase only the
+  test budget and peer hold time, retain its completion marker/timeout checks,
+  and require a real BlockingIOError through a passthrough write observer.
+  Production deadlines and runner behavior remain unchanged. RED/GREEN evidence
+  and the read-only Standards assessment belong to the active verification record.
+
+
 ## Completed PR Repair Archive
 
 - Authorized on 2026-09-21: archive the five completed changes introduced by PR #1,
@@ -45,7 +66,7 @@
 
 - Approved: skip official-model comparison for validated custom catalogs,
   preserve runtime/source checks, isolate verification, and update PR #1.
-- Execution source: `openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md`.
+- Execution source: `openspec/changes/respect-custom-model-catalog/tasks.md`.
 - Baseline: 9c9bc73; scope and write set are recorded in that change's design.
 - Evidence: `.planning/devflow/verification/respect-custom-model-catalog.md`.
 - Status: implementation, isolated regressions, package validation and both

@@ -89,7 +89,13 @@ official model name does not imply matching capabilities. This path does not
 read or require the official `models_cache.json`; its receipt records official
 model comparison as not applicable. Catalog integrity, original-source
 provenance behind managed overlays, Desktop protocol compatibility, required
-runtime features, and bounded behavior probes still apply. Feature inventories
+runtime features, and bounded behavior probes still apply. If `model_catalog_json`
+is absent, preparation instead reads `models_cache.json` from the internal and
+official Runtime Binding homes and applies the existing model metadata comparison.
+Both caches must contain the selected model and pass safe-file/identity checks;
+missing or invalid data fails explicitly. An invalid explicit catalog does not
+fall back to caches. Generated overlays retain their original source kind, so
+repeat updates cannot accidentally acquire the custom-catalog exemption. Feature inventories
 support dot-separated names such as `guardianv2.thread_context`; these remain
 complete identifiers subject to the same compatibility policy as flat names.
 Malformed rows and unclassified feature differences still block promotion.

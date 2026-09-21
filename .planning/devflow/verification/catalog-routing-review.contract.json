@@ -1,0 +1,26 @@
+{
+  "baseline": "3a32b4e",
+  "goal": "Review the reopened original custom-catalog repair for complete default-model comparison and preserved integrity.",
+  "agents": [
+    {
+      "id": "catalog_routing_spec",
+      "scope": "Spec conformance and behavioral gaps",
+      "write_set": []
+    },
+    {
+      "id": "catalog_routing_standards",
+      "scope": "Repository engineering rules, stability and maintainability",
+      "write_set": []
+    }
+  ],
+  "constraints": [
+    "read-only",
+    "no installed state or provider requests",
+    "use Python -B for isolated test commands",
+    "no scope expansion",
+    "report concrete file/line findings"
+  ],
+  "verification": "Review git diff 3a32b4e including untracked new routing tests and restored original change; optional focused routing test only.",
+  "evidence": ".planning/devflow/verification/respect-custom-model-catalog.md",
+  "human_gate": "Requester authorized the correction, isolated verification and existing PR update; live installation and release excluded."
+}

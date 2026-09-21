@@ -1,7 +1,9 @@
 ## Why
 
-Internal updates with an explicit model catalog currently require the official
-model cache and compare entries by model slug. A provider-defined model is not
+Internal updates must distinguish explicit custom catalogs from default runtime
+model data. The initial repair removed official-cache coupling for explicit
+catalogs but left catalog-free updates unreachable; the original metadata
+comparison must remain available for that path. A provider-defined model is not
 the official model merely because its slug matches. Missing caches or unrelated
 official metadata therefore block otherwise compatible candidates.
 
@@ -12,6 +14,9 @@ official metadata therefore block otherwise compatible candidates.
   recording that comparison as not applicable.
 - Preserve source validation, overlay provenance, runtime protocol and feature
   checks, bounded behavior probes, and transactional revalidation.
+- Route absent model_catalog_json through default runtime model caches and the
+  existing official/internal metadata comparison; malformed explicit values fail.
+- Preserve model-source kind across managed overlays and repeat updates.
 - Version the changed policy so old receipts require fresh preparation.
 
 ## Capabilities

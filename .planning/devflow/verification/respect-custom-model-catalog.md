@@ -55,3 +55,55 @@ final verification; no filesystem write scope overlaps exist.
   runner selects the exact verified implementation package. No runtime bytes
   changed in the follow-up fixture/evidence commits. Logs owned by this run use the prefix
 `.planning/devflow/verification/local/custom-catalog-`.
+
+## Reopened on 2026-09-21
+
+The original archive preserved all artifacts. Its complete-preparation tests
+covered explicit catalogs only, while the ordinary comparison test exercised
+only the policy function. The requester clarified that catalog-free updates
+must reach ordinary comparison. Prior results remain valid for their tested
+scope, but do not prove that end-to-end branch. The original change is active
+again, with four pending correction tasks. No implementation changed at reopen.
+
+## Correction RED / GREEN and review
+
+- Full preparation without model_catalog_json reproduced the incomplete-config
+  error. It now passes through the default-cache comparison path. Invalid explicit
+  values never fall back, and explicit valid custom catalogs remain independent
+  of both default caches, including when the source filename is models_cache.json.
+- Additional RED/GREEN cases caught repeat-overlay custom reclassification, a
+  manifest source-kind flip, a manifest-only legacy policy downgrade, and malformed
+  policy metadata. Policy 4 binds origin to the recorded receipt hash, policy and
+  source before regenerating current evidence. Genuine legacy custom receipts
+  remain usable as provenance, not as current acceptance.
+- Routing matrix: 16/16 passed. Parity: 107/107 passed. Current runtime policy:
+  5/5 passed. Profile: 227/227 passed. Transaction: 258 cases, 257 passed and
+  one existing skip. Logs use the catalog-routing- prefix below local/.
+- The pre-existing large-write deadline fixture repeatedly failed before reaching
+  its intended backpressure condition. A read-only passthrough diagnostic observed
+  cold core startup at 0.550 seconds, beyond its old 0.5-second budget. The bounded
+  test-only guard extends the budget/peer hold and asserts real BlockingIOError.
+  One initial post-adjustment full run also missed the marker; focused, diagnostic
+  full and final direct full-suite verification then passed. Production runner
+  deadlines were not changed. This evidence is a test-fixture limitation, not a
+  model-routing production failure or a claim that repeated failures passed.
+- Spec review's P1 manifest downgrade finding and Standards review's P2 malformed
+  policy finding each gained a failing test before their fixes. Both reviewers
+  closed all model-routing findings on recheck. The final incidental fixture
+  review also passed; it preserves the intermittent load-related test limitation.
+  Exact committed-package verification is pending below.
+- Formal custom-model-catalog-parity specs now preserve both requirements and all
+  six original scenarios, adding five correction scenarios. The original change
+  remains active until delivery and package verification finish.
+
+## Generated artifact contract for correction delivery
+
+Owner: the primary catalog-routing correction run. Command: git archive of its
+implementation commit, package-release.sh, then install.sh with explicit local
+install/lib roots and file URLs. Allocate the absent root
+.planning/devflow/verification/local/catalog-routing-package/ for source archive,
+distribution, installation and verification logs. The private local test-entrypoint
+artifact roots may additionally receive source/distribution copies named for the
+same commit. Do not use installed workstation paths, change shell startup files,
+or call a provider/Desktop runtime. Retain all artifacts and unrelated local
+research; no automatic cleanup or deletion is authorized by this contract.

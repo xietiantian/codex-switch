@@ -14,3 +14,9 @@
 
 Owner/write set/evidence contract: design.md. Evidence:
 .planning/devflow/verification/respect-custom-model-catalog.md.
+
+## 4. Reopened completion gap: catalog-free preparation
+- [x] 4.1 Reproduce absent-catalog failure through complete preparation, then restore default-cache metadata comparison while rejecting invalid explicit catalog values.
+- [x] 4.2 Preserve source kind across overlays; verify both-cache identity, metadata rejection, source-kind corruption, repeat updates and legacy custom provenance.
+- [ ] 4.3 Run isolated regressions, package checks, strict specification validation and independent Standards/Spec reviews; correct the earlier completion evidence.
+- [ ] 4.4 Commit/push the verified correction to PR #1 and refresh the isolated PR test artifact.

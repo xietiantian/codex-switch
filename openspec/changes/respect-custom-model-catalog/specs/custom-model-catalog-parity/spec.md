@@ -38,3 +38,26 @@ catalogs and SHALL preserve runtime compatibility and source integrity checks.
 #### Scenario: Ordinary model-policy callers retain comparison
 - **WHEN** policy evaluation has no explicit custom-catalog context
 - **THEN** existing official/internal model metadata differences remain classified.
+
+#### Scenario: Missing catalog uses default model comparison
+- **WHEN** the profile has no model_catalog_json key
+- **THEN** preparation uses the internal runtime model cache and official reference cache
+- **AND** metadata differences pass through the existing comparison policy
+- **AND** runtime compatibility and behavior probes remain required.
+
+#### Scenario: Invalid explicit catalog never falls back
+- **WHEN** an explicit catalog is empty, non-string, unsafe, malformed or lacks the active model
+- **THEN** preparation rejects that configuration without treating it as absent.
+
+#### Scenario: Default model evidence is missing or changed
+- **WHEN** either required runtime cache is missing, unsafe, malformed or changes during preparation or before promotion
+- **THEN** preparation or revalidation fails without changing the bound binary or original configuration.
+
+#### Scenario: Managed default overlay remains comparable
+- **WHEN** a default-cache candidate is prepared again from its managed overlay
+- **THEN** its recorded runtime-cache origin is retained and official comparison still runs
+- **AND** invalid or missing current-policy source-kind provenance is rejected.
+
+#### Scenario: Legacy custom provenance remains usable
+- **WHEN** an older custom-only manifest has no source-kind field
+- **THEN** preparation resolves its original custom catalog and regenerates current-policy evidence.

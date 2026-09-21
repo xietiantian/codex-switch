@@ -4122,6 +4122,7 @@ class ParityBundleManifestTests(unittest.TestCase):
             "parity_receipt_sha256",
             "parity_source_catalog_path",
             "parity_source_catalog_sha256",
+            "parity_model_catalog_kind",
         }
     )
     ACTIVE_MODEL = "gpt-5.6-sol"
@@ -4286,6 +4287,7 @@ class ParityBundleManifestTests(unittest.TestCase):
                         protocol_adapter_rule_set_digest()
                     ),
                     "parity_capability_receipt_sha256": SHA_F,
+                    "parity_model_catalog_kind": "runtime-cache",
                     "parity_internal_fingerprint_sha256": (
                         bundle.receipt.internal_fingerprint.fingerprint_sha256
                     ),
@@ -5029,6 +5031,7 @@ class ParityPreparationTests(unittest.TestCase):
             )
             final_overlay.parent.mkdir(mode=0o700)
             final_overlay.write_bytes(bundle.overlay.overlay_payload)
+            final_overlay.with_name("receipt.json").write_bytes(bundle.receipt_payload)
             final_overlay.chmod(0o600)
             profile_config.write_bytes(
                 bundle.config_projection.payload_for(profile_config)
@@ -5525,16 +5528,32 @@ class ParityProbeTests(unittest.TestCase):
             "    print(json.dumps({'id': request['id'], 'result': result}), flush=True)\n"
             "    if large:\n"
             "        (Path(os.environ['CODEX_HOME']) / 'large-id-sent').touch()\n"
-            "        time.sleep(1.5)\n"
+            "        time.sleep(5.0)\n"
             "        break\n"
         ).encode()
         seams = self.probe_seams()
+        blocked_writes = []
+        real_write = parity_module.os.write
+
+        def observe_write(fd: int, data: bytes) -> int:
+            try:
+                return real_write(fd, data)
+            except BlockingIOError:
+                blocked_writes.append(len(data))
+                raise
+
         with tempfile.TemporaryDirectory() as temp_dir:
             inputs = self.inputs(seams, Path(temp_dir), backend_payload=script)
-            report = seams["run_parity_probes"](
-                inputs=inputs, timeout_seconds=0.5, max_output_bytes=256 * 1024,
+            # Include cold interpreter startup without spending the whole bound
+            # before the large request. The peer holds its pipe beyond the bound.
+            with mock.patch.object(parity_module.os, "write", side_effect=observe_write):
+                report = seams["run_parity_probes"](
+                    inputs=inputs, timeout_seconds=2.0, max_output_bytes=256 * 1024,
+                )
+            self.assertTrue(
+                (inputs.codex_home / "large-id-sent").is_file(), report.results,
             )
-            self.assertTrue((inputs.codex_home / "large-id-sent").is_file())
+        self.assertTrue(blocked_writes, "the request must hit real pipe backpressure")
         self.assertEqual(self.result_codes(report)[-1], ("typed_subagent_v2", "timeout"))
 
     def test_v1_or_nickname_only_subagent_never_passes(self) -> None:
