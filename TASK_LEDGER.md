@@ -8,7 +8,9 @@
 - Scope/evidence: that change’s design and `.planning/devflow/verification/classify-current-runtime-extensions.md`.
 - Status: exact classification and native probes implemented; 112 parity/current
   cases, native regression, 227 profile cases and transaction guards pass.
-  Both review axes pass after bounded fixes. Clean package delivery is next.
+  Both review axes pass after bounded fixes. Implementation a645137 is pushed
+  to PR #1; clean package upgrade, nine installed tests and local test-entrypoint
+  refresh are complete. No live installation or release publication occurred.
 - No live install/Desktop mutation, external provider call or file-ID emulation.
 - Incidental finding TYPED-EVENTS-2026-09-21: CONTINUE_WITH_MINIMAL_GUARD.
   Native exec JSON lacks the previously assumed typed role/source fields.

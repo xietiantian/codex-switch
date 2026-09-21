@@ -65,7 +65,13 @@ run_parity_probes, receipt serialization and preparation/transaction entrypoints
   dependency findings are closed after independent public-seam rechecks.
 - Standards review: zero open findings; three P2s (partial lines, malformed
   scalars, write deadline) are closed after independent rechecks.
-- Clean package verification is the remaining delivery check.
+- Clean a645137 archive/package validated before and after isolated installation.
+  Upgrading from the previous PR package passed nine installed-module/native
+  cases, isolated status and post-test manifest checks; no .pyc was generated.
+- Delivered implementation a645137 to https://github.com/cYz26/codex-switch/pull/1;
+  GitHub readback confirmed the commit and updated description. The existing
+  local PR test entrypoint now uses its verified package. No additional setup
+  script logic was necessary for this repair.
 
 Reproducible commands (from scripts unless stated otherwise):
 
@@ -80,3 +86,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest test_codex_protocol_config test
 Raw local logs use the registered current-extensions-* evidence prefix and are
 not public artifacts. Sanitized runtime fixtures are under evals/fixtures.
 The active OpenSpec task list owns delivery; no release or archive is claimed.
+
+Verified code commit: `a645137482ba7dd1a48a1a2e9fbd4011c07d38bd`.
+Archive SHA-256: `cdf28fc74fe86b469d66124e05ebc9cb41e8af608c9b681368ee53e48902b31e`.
+Subsequent delivery-record edits do not change packaged files.

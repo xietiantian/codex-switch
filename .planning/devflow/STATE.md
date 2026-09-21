@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: complete
 
 current_change:
   id: classify-current-runtime-extensions
-  status: implementing
+  status: completed
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -91,8 +91,10 @@ context_health:
 Exact optional classification and native core verification pass 112 parity/current
 cases, an opt-in real CLI regression, 227 profile cases, transaction guards and
 both independent review axes. Full current inventories have thirteen optional
-queue entries and no errors. Clean package/install verification and authorized
-PR delivery remain; no live Desktop or external provider validation is claimed.
+queue entries and no errors. Clean package upgrade and nine installed-module
+checks pass. Implementation a645137 is pushed to PR #1 and its verified local
+test entrypoint is refreshed. No live Desktop or external provider validation
+is claimed.
 
 Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache

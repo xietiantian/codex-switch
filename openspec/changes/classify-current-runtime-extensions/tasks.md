@@ -8,8 +8,8 @@
 - [x] 2.2 Verify observed dependencies, stale policy, failed probes and receipt round trips remain guarded.
 
 ## 3. Delivery
-- [ ] 3.1 Run isolated regressions, static/OpenSpec/package checks and Spec/Standards review.
-- [ ] 3.2 Update evidence, commit/push to PR #1 and refresh the verified local test package.
+- [x] 3.1 Run isolated regressions, static/OpenSpec/package checks and Spec/Standards review.
+- [x] 3.2 Update evidence, commit/push to PR #1 and refresh the verified local test package.
 
 Owner/write set/evidence: design.md and
 .planning/devflow/verification/classify-current-runtime-extensions.md.
