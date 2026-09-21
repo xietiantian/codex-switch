@@ -220,3 +220,27 @@ The repository has no git_transport_preflight.py; native transport is the bounde
 fallback, independent of the separately checked GitHub PR control plane.
 
 - Fresh profile regression completed: 227/227 passed in 292.658 seconds with an isolated shell-profile path. Section 5.1-5.3 verification and review are complete; only committed-package delivery and archive remain.
+
+
+### Cache-free correction delivery and archive
+
+- Implementation 0e3a011 was built from its exact git archive in the predeclared
+  absent package root. The previous PR package installed and upgraded to it using
+  explicit isolated install/lib roots and local file URLs.
+- All 34 installed-module checks passed, including 17 bundled-source, 16 routing
+  and the existing backpressure regression. Distribution, archive and installed
+  bundle manifests remained valid, with no .pyc residue.
+- Native Git pushed 0e3a011 to the existing fork PR branch. The stable private
+  test entrypoint now selects this verified source/distribution; its prior runner
+  is retained. Copied distribution bytes/manifests and shell syntax passed again.
+  The setup script was not executed and its tracked source did not change.
+- OpenSpec 1.7 archive context was read; it added no operation guidance. All tasks
+  were complete and the main spec matched all two requirements/fifteen scenarios
+  before moving the original change back to its original archive location.
+  Four files have identical before/after move hashes.
+- All five PR repairs now contain 47 complete tasks, 13 requirements and 46
+  scenarios. Every archived requirement block matches its corresponding main spec.
+  No unrelated change, pre-existing research, live installation or user config
+  was modified. This follow-up archive/evidence commit changes no runtime bytes.
+
+- Post-archive strict validation: 27 passed, zero failed. Final diff whitespace and public-content boundary checks passed. No production bytes changed after exact-package verification.

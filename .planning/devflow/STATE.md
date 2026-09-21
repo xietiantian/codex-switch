@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: validation_delivery
+current_stage: complete
 
 current_change:
   id: respect-custom-model-catalog
-  status: reopened
+  status: archived
 
 standing_milestone:
   status: inactive
@@ -33,7 +33,7 @@ gates:
   implementation_done: true
   verification_passed: true
   state_updated: true
-  archive_allowed: false
+  archive_allowed: true
   release_allowed: false
 
 implementation_readiness:
@@ -41,7 +41,7 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-21-catalog-routing-correction
+  last_checkpoint_id: 2026-09-21-cache-free-model-correction
   last_checkpoint_file: .planning/devflow/verification/respect-custom-model-catalog.md
   compact_recommended: false
   compact_status: not_needed
@@ -71,7 +71,7 @@ context_management:
 goal_gate:
   id: respect-custom-model-catalog
   required: true
-  status: in_progress
+  status: complete
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
@@ -79,19 +79,23 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: archive_verified_catalog_routing_correction
+  last_decision: archive_verified_cache_free_model_correction
   last_goal_status: aligned
-  goal_summary: Restore catalog-free comparison while preserving custom-source applicability and integrity.
+  goal_summary: Complete default model comparison with valid cache or corresponding offline bundled evidence.
 ---
 
 # Workflow State
 
-## Active Cache-Free Correction
+## Completed Cache-Free Correction
 
 Section 5 source and native verification are complete: 145 parity/source/current
 tests, 227 profile tests, 257 transaction tests plus one existing skip; both
 review axes are closed. Real cache-free complete preparation passes both native
-probes in isolation. Committed-package verification and PR delivery remain.
+probes in isolation. Exact implementation 0e3a011 passed an isolated previous
+package upgrade, 34 installed checks and manifest validation without bytecode
+residue, then was pushed to PR #1. The stable test entrypoint selects that package.
+All 16 original-change tasks are complete; the synchronized original change is
+re-archived. Across five repairs: 47 tasks, 13 requirements and 46 scenarios.
 Historical delivery follows.
 
 ## Previous Original-Change Correction
@@ -141,4 +145,4 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Complete section 5.4: verify exact committed package, push existing PR, refresh the stable test entrypoint, and re-archive the synchronized original change.
+No implementation tasks remain for this repair. Preserve the verified test entrypoint; live installation and provider-backed Desktop UI acceptance remain requester actions.

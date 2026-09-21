@@ -1,13 +1,13 @@
 # Task Ledger
 
-## Active Cache-Free Correction: Custom Model Catalog Parity
+## Completed Cache-Free Correction: Custom Model Catalog Parity
 
 - Reopened again on 2026-09-21 after a missing-cache update failure. Section 5
   addresses cache-free runtime evidence; section 4 remains historical delivery.
 - Previously reopened on 2026-09-21 following requester clarification: absent catalog must
   retain ordinary metadata comparison through the full update preparation path.
 - Original archive was byte-preserving, but full-path acceptance was incomplete.
-- Execution source: openspec/changes/respect-custom-model-catalog/tasks.md, section 5.
+- Execution source: openspec/changes/archive/2026-09-21-respect-custom-model-catalog/tasks.md, section 5.
 - Section 5 baseline 1019312 (section 4 baseline 3a32b4e). Scope, public seams, write set, tests and review contracts are
   in that change’s correction addendum. No live installation/provider/desktop
   mutation; existing PR commit/push and isolated package refresh remain authorized.
@@ -28,10 +28,13 @@
   107, current-runtime 5 and transaction 257/258 (one existing skip) pass.
   Native complete preparation with real runtimes and a loopback provider passes
   both probes without a cache or injected model/schema/feature/probe loader.
-  Profile, committed-package and delivery completion are recorded in the
-  verification record before section 5 is marked complete.
-- Across the five PR repairs, 43 tasks are complete and the synchronized main
-  specs retain 13 requirements and 42 scenarios. Historical counts below describe
+  Profile 227/227 and exact-commit package upgrade plus 34 installed-module
+  checks pass. Implementation 0e3a011 is pushed to PR #1, and the stable local
+  entrypoint selects its verified package. All 16 original-change tasks are
+  complete; two requirements and fifteen scenarios match the main spec. The
+  original change is re-archived without losing historical evidence.
+- Across the five PR repairs, 47 tasks are complete and the synchronized main
+  specs retain 13 requirements and 46 scenarios. Historical counts below describe
   the original archive before this correction.
 - Incidental finding PROBE-DEADLINE-FIXTURE-2026-09-21:
   CONTINUE_WITH_MINIMAL_GUARD. The existing backpressure fixture's 0.5-second

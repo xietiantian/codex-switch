@@ -25,4 +25,4 @@ Owner/write set/evidence contract: design.md. Evidence:
 - [x] 5.1 Reproduce cache-free complete preparation and implement bounded offline model export with explicit provenance.
 - [x] 5.2 Persist bundled snapshots transactionally; preserve origin on repeat updates and reject source/binary/cache-selection drift.
 - [x] 5.3 Run negative/native/isolated regressions and independent Spec/Standards reviews; synchronize corrected specs.
-- [ ] 5.4 Verify the committed package, push to PR #1, refresh the stable test entrypoint and archive the corrected original change.
+- [x] 5.4 Verify the committed package, push to PR #1, refresh the stable test entrypoint and archive the corrected original change.

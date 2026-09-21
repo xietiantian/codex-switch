@@ -32,3 +32,15 @@ Workflow sources: repository AGENTS.md, ENGINEERING_POLICY.md, REVIEW_CHECKLIST.
 - No incomplete tasks or unresolved review blockers remain within these five repairs. Earlier grammar-only compatibility findings are resolved by the subsequent current-runtime extension repair.
 - Existing implementation verification remains in each linked repair record. No runtime test, live installation, provider call or new release is claimed by this documentation-only operation.
 - Delivery target remains the existing PR #1; unrelated active changes and local research are preserved.
+
+
+## Cache-free completion correction
+
+The original respect-custom-model-catalog change was reopened again for legitimately
+missing runtime caches, corrected under section 5, and re-archived after native,
+isolated regression, exact package and two-axis review. Evidence is recorded in
+respect-custom-model-catalog.md; implementation 0e3a011 is on PR #1. The original
+four change files were moved without content changes after task completion and
+spec sync. All five archived repairs now total 47 completed tasks, 13 requirements
+and 46 scenarios, each matching its main-spec requirement blocks. The other four
+archives remain untouched.
