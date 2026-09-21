@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: complete
+current_stage: verification
 
 current_change:
   id: respect-custom-model-catalog
-  status: archived
+  status: in_progress
 
 standing_milestone:
   status: inactive
@@ -31,9 +31,9 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: true
+  verification_passed: false
   state_updated: true
-  archive_allowed: true
+  archive_allowed: false
   release_allowed: false
 
 implementation_readiness:
@@ -41,7 +41,7 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-21-cache-free-model-correction
+  last_checkpoint_id: 2026-09-21-parity-lifecycle-correction
   last_checkpoint_file: .planning/devflow/verification/respect-custom-model-catalog.md
   compact_recommended: false
   compact_status: not_needed
@@ -71,7 +71,7 @@ context_management:
 goal_gate:
   id: respect-custom-model-catalog
   required: true
-  status: complete
+  status: active
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
   suggested_goal: none
 
@@ -79,12 +79,20 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: archive_verified_cache_free_model_correction
+  last_decision: verify_parity_lifecycle_correction
   last_goal_status: aligned
-  goal_summary: Complete default model comparison with valid cache or corresponding offline bundled evidence.
+  goal_summary: Preserve verified parity across final capture, rebind and activation with independent homes.
 ---
 
 # Workflow State
+
+## Current Lifecycle Correction
+
+Section 6 of the original change is active. Preparation, home binding,
+transactional missing-config publication and repeated activation are implemented.
+Review-found explicit-home persistence and pre-switch stale-config guards pass
+three native isolated lifecycle scenarios, including rollback. Final regression,
+package verification, review closure and PR delivery remain in progress.
 
 ## Completed Cache-Free Correction
 
@@ -145,4 +153,4 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-No implementation tasks remain for this repair. Preserve the verified test entrypoint; live installation and provider-backed Desktop UI acceptance remain requester actions.
+Finish final regression and independent review, verify the exact committed package, update the existing PR and archive the completed original change. Live installation and provider-backed Desktop UI acceptance remain requester actions.

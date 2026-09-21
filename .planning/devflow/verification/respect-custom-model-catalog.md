@@ -1,5 +1,67 @@
 # Custom model catalog verification
 
+## Lifecycle correction in progress (2026-09-21)
+
+Baseline 757c0cd; section 6 of the reopened original change is the execution
+source. The requester approved final capture, same-binary preparation and
+verified activation, including the independently reproduced home/projection
+failures. Source/isolated-test/PR delivery authority is standing; no workstation
+state, provider, credentials or Desktop process is a test target.
+
+Native isolated RED: capture removes manifest receipt references; rebind with
+an adopted internal home uses the same file for shared and runtime inputs,
+then invalidates its shared digest. Selecting a separate official home allows
+rebind verification, but the next switch rematerializes different runtime and
+profile bytes. These results do not establish a healthy lifecycle.
+
+Current test owner: primary. The new parity lifecycle tests allocate and clean
+only their own TemporaryDirectory roots. Retain `local/parity-lifecycle-*`
+diagnostics. Home-selection RED: three public-contract tests fail because no
+common runtime home resolver exists. Native acceptance is retained privately;
+public fixtures use a loopback provider and no private business configuration.
+
+Review contract: compare baseline 757c0cdd37461a929abd11c3f617bfc9c6ebe218 with
+the staged and unstaged working tree (`git diff 757c0cd`); no intervening commits.
+Spec reviewer owns the original change's section 6 requirements and lifecycle
+correctness. Standards reviewer owns ENGINEERING_POLICY.md, AGENTS.md and the
+complete code-review smell baseline. Both are read-only; neither may modify
+files, use live configuration or contact a provider. Review scope is the five
+production modules, three test modules, README and lifecycle planning/evidence
+artifacts shown by that diff. Primary owns fixes, tests and final delivery.
+
+Fresh isolation: runtime-binding 90/90 and transaction 257/258 (one existing
+Python 3.9 interpreter skip) passed. Native first/repeated activation, stale
+profile detection and both fresh/existing rollback are being rechecked with
+the final source. Full profile and parity checks run in temporary homes.
+
+## Lifecycle final source verification (2026-09-21)
+
+- Final combined transaction/parity/model-source/current-policy run: 406 cases,
+  405 passed and one existing Python 3.9 interpreter skip. The earlier timing
+  fixture miss under concurrent load passed its isolated recheck and this full
+  combined run; deadlines were not relaxed.
+- Profile: all 227 cases exercised. A harness-level skip-self-update variable
+  incorrectly suppressed nine self-update scenarios; removing that variable
+  made all nine pass. Production code and those test expectations were unchanged.
+- Runtime binding: all 90 cases exercised. Two complete artifact-set assertions
+  needed the newly required official manifest publication; their expectations
+  now also check the selected official home. The other 88 passed unchanged.
+- Native lifecycle: 4 tests passed (three actual-backend subcases: first setup,
+  recaptured active profile, first explicit official home). Each exercises failed
+  publication rollback, successful same-binary rebind and two switches. Mutated
+  profile input is rejected before activation writes; broken official manifests
+  yield a stable unhealthy report. The existing standalone native probe test
+  also passed after extracting the shared loopback fixture.
+- Review RED: broken official manifest escaped the report API. Spec review also
+  identified omitted explicit-home publication; Standards review identified
+  projection-only checking before activation. All three were fixed and verified.
+  Independent Spec and Standards reviews now have no open findings.
+- Python 3.9 grammar, shell syntax, diff checks and 28 strict OpenSpec items pass.
+  Main specs include the lifecycle requirement and explicit-home scenario.
+- No live installation, configuration, cache, LaunchAgent, provider account or
+  Desktop UI was changed. This is native loopback acceptance, not provider-backed
+  Desktop UI acceptance. Exact committed-package verification and delivery follow.
+
 ## Contract
 
 Baseline 9c9bc73; execution source respect-custom-model-catalog/tasks.md.

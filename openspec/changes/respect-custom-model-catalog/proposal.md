@@ -35,3 +35,11 @@ No new dependency, command-line flag, live installation, cache mutation,
 provider request, release, or change to installer/profile capture sequencing.
 
 Latest correction: absent default caches use complete offline catalogs exported by the corresponding runtimes, with durable source provenance and transactional snapshots. Present invalid caches still fail.
+
+Lifecycle correction: a caller may recapture its final configuration after an
+update. Capture continues to invalidate prior evidence. A subsequent same-binary
+rebind must use independently resolved profile homes, support an absent official
+runtime configuration, and produce evidence that survives the following switch.
+The switch must retain the prepared profile/runtime projection rather than
+silently regenerating different bytes. Existing model applicability and runtime
+compatibility checks remain mandatory.

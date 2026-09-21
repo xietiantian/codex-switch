@@ -27,6 +27,7 @@ from codex_switch_core import (
     write_json,
 )
 from codex_switch_launch import validate_executable_path
+from codex_switch_home_select import resolve_runtime_homes
 from codex_switch_app_wrapper import write_profile_app_wrapper
 from codex_switch_parity import (
     ConfigInputs,
@@ -531,7 +532,30 @@ def cmd_set_bin(
         RuntimeBindingExecutableSwap,
     ):
         raise SwitchError("Internal executable swap contract is invalid")
-    candidate_manifest = dict(manifest)
+    official_manifest_path = store.manifest_path("openai-official")
+    try:
+        original_official_manifest_payload = official_manifest_path.read_bytes()
+    except FileNotFoundError:
+        original_official_manifest_payload = None
+    home_plan = resolve_runtime_homes(store)
+    try:
+        selected_official_manifest_payload = official_manifest_path.read_bytes()
+    except FileNotFoundError:
+        selected_official_manifest_payload = None
+    if selected_official_manifest_payload != original_official_manifest_payload:
+        raise SwitchError("Official home binding changed during runtime selection")
+    official_manifest_update = home_plan.manifest_updates.get("openai-official")
+    if home_plan.official.source == "default" and home_plan.official.path == store.official_codex_home:
+        # A default home needs no new binding record just to refresh evidence.
+        official_manifest_update = None
+    official_manifest_payload = (
+        (json.dumps(official_manifest_update, indent=2, sort_keys=True) + "\n").encode()
+        if official_manifest_update is not None else None
+    )
+    # Keep the legacy capture source separate from the resolved runtime homes.
+    store.official_codex_home = home_plan.official.path
+    store.internal_codex_home = home_plan.internal.path
+    candidate_manifest = dict(home_plan.manifest_updates.get("internal", manifest))
     candidate_manifest.pop("internal_cli_generation", None)
     candidate_manifest.pop("internal_app_readiness", None)
     candidate_manifest["codex_bin"] = str(bin_path)
@@ -668,6 +692,7 @@ def cmd_set_bin(
                     profile_config_path,
                     shared_config_path,
                 ),
+                optional_sources=(shared_config_path,),
             )
             active_runtime_config_path = _materialized_active_internal_config(
                 store,
@@ -888,6 +913,15 @@ def cmd_set_bin(
                     raise SwitchError(
                         "Internal manifest changed before runtime rebind"
                     )
+                try:
+                    observed_official = official_manifest_path.read_bytes()
+                except FileNotFoundError:
+                    observed_official = None
+                allowed_official = {original_official_manifest_payload}
+                if marker_present and official_manifest_payload is not None:
+                    allowed_official.add(official_manifest_payload)
+                if observed_official not in allowed_official:
+                    raise SwitchError("Official home binding changed before runtime rebind")
                 if (
                     _materialized_active_internal_config(
                         store,
@@ -947,6 +981,11 @@ def cmd_set_bin(
                     mode=0o600,
                 ),
             ]
+            if official_manifest_payload is not None:
+                artifacts.append(RuntimeBindingTextArtifact(
+                    role="official_manifest", path=official_manifest_path,
+                    payload=official_manifest_payload, mode=0o600,
+                ))
             if shared_config_path in changed_paths:
                 try:
                     shared_config_payload = projection_payloads[

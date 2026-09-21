@@ -92,10 +92,11 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         self.work = self.root / "work"
         self.work.mkdir(mode=0o700)
 
-    def prepare(self, candidate=None, *, probe_runner=None, catalog_loader=None, timeouts=None):
+    def prepare(self, candidate=None, *, probe_runner=None, catalog_loader=None, timeouts=None, optional_sources=()):
         selected = candidate or self.candidate
+        input_options = {"optional_sources": optional_sources} if optional_sources else {}
         selected = replace(selected, source_config=parity.ConfigInputs.capture(
-            profile_config=self.profile, source_paths=(self.profile, self.shared),
+            profile_config=self.profile, source_paths=(self.profile, self.shared), **input_options,
         ))
         def success(request):
             return parity.ParityProbeCommandResult(
@@ -121,6 +122,39 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         self.assertEqual(self.profile.read_text(), self.profile_payload)
         self.assertEqual(self.internal_cache.read_bytes(), self.model_payload)
         parity.revalidate_parity_bundle_inputs(bundle)
+
+    def test_absent_official_config_is_explicit_shared_input_until_publication(self):
+        self.shared.unlink()
+        bundle = self.prepare(optional_sources=(self.shared,))
+        self.assertTrue(bundle.healthy)
+        self.assertFalse(self.shared.exists())
+        self.assertEqual(bundle.config_projection.payload_for(self.shared), b"")
+        self.assertIn(self.shared, bundle.config_projection.changed_paths)
+        parity.revalidate_parity_bundle_inputs(bundle)
+        self.shared.write_bytes(b"")
+        with self.assertRaisesRegex(parity.ParityValidationError, "changed|stale"):
+            parity.revalidate_parity_bundle_inputs(bundle)
+
+    def test_optional_shared_config_never_hides_invalid_present_sources(self):
+        for kind in ("malformed", "symlink", "directory"):
+            with self.subTest(kind=kind):
+                self.shared.unlink()
+                if kind == "malformed":
+                    self.shared.write_bytes(b"[broken")
+                elif kind == "symlink":
+                    self.shared.symlink_to(self.root / "absent-target")
+                else:
+                    self.shared.mkdir()
+                with self.assertRaises(parity.ParityValidationError):
+                    self.prepare(optional_sources=(self.shared,))
+                if kind == "directory":
+                    self.shared.rmdir()
+                    self.shared.write_bytes(b"")
+
+    def test_missing_internal_profile_cannot_be_an_optional_source(self):
+        self.profile.unlink()
+        with self.assertRaises(parity.ParityValidationError):
+            self.prepare(optional_sources=(self.profile, self.shared))
 
 
     def rebound(self, bundle):

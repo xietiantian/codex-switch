@@ -86,3 +86,40 @@ catalogs and SHALL preserve runtime compatibility and source integrity checks.
 - **WHEN** a generated overlay originated from a cache or bundled default source
 - **THEN** a later update validates its origin and selects fresh evidence from current caches or corresponding binaries
 - **AND** the overlay is never reclassified as an explicit custom catalog.
+
+### Requirement: Prepared parity survives profile activation
+After a profile is recaptured, same-binary preparation SHALL use the resolved
+independent profile homes and publish current evidence with its prepared
+configuration. Activation SHALL retain that prepared profile and runtime
+projection, while changed inputs remain subject to stale-evidence rejection.
+
+#### Scenario: Adopted internal home and legacy live-home argument
+- **WHEN** internal adopts the legacy live home and the official profile has a separate home
+- **THEN** rebind and verification use the separate official home for shared/reference inputs
+- **AND** internal runtime publication does not overwrite those inputs.
+
+#### Scenario: Explicit official home persists across commands
+- **WHEN** a first rebind selects an explicit official home
+- **THEN** successful publication retains that binding for later commands without the argument
+- **AND** failed publication restores the previous binding.
+
+#### Scenario: First activation without official runtime configuration
+- **WHEN** the internal profile is valid and only the official runtime config is absent
+- **THEN** preparation uses explicit empty shared-input evidence and publishes its config transactionally
+- **AND** no provider, auth or model cache is synthesized for the official profile.
+
+#### Scenario: Missing source changes before promotion
+- **WHEN** a config file appears at a path recorded absent during preparation
+- **THEN** promotion rejects the changed source and preserves the previous binding.
+
+#### Scenario: Prepared profile is switched repeatedly
+- **WHEN** a successful rebind is followed by first or repeated internal activation with unchanged inputs
+- **THEN** profile and runtime configuration continue to match the complete parity receipt.
+
+#### Scenario: Present invalid shared configuration
+- **WHEN** shared configuration is malformed, unreadable or a symlink
+- **THEN** preparation fails without treating it as an absent source.
+
+#### Scenario: Prepared configuration changes
+- **WHEN** a prepared configuration changes before activation
+- **THEN** the old receipt cannot make the changed generation healthy.

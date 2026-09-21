@@ -3284,6 +3284,7 @@ class ConfigInputs:
     profile_config: Path
     sources: tuple[tuple[Path, str], ...]
     source_states: tuple[tuple[Path, int, int, int], ...] = ()
+    missing_sources: tuple[Path, ...] = ()
 
     @classmethod
     def capture(
@@ -3291,16 +3292,26 @@ class ConfigInputs:
         *,
         profile_config: Path,
         source_paths: tuple[Path, ...],
+        optional_sources: tuple[Path, ...] = (),
     ) -> ConfigInputs:
-        snapshots = tuple(
-            _regular_file_snapshot(
-                path,
-                code="parity.config.source_unsafe",
-                label="parity config source",
-                max_bytes=MAX_PARITY_CONFIG_BYTES,
+        if any(path == profile_config or path not in source_paths for path in optional_sources):
+            raise ParityValidationError(
+                "parity.config.inputs_invalid", "Only shared config sources may be optional."
             )
-            for path in source_paths
-        )
+        snapshots = []
+        missing = []
+        for path in source_paths:
+            try:
+                snapshot = _regular_file_snapshot(
+                    path, code="parity.config.source_unsafe", label="parity config source",
+                    max_bytes=MAX_PARITY_CONFIG_BYTES,
+                )
+            except ParityValidationError as exc:
+                if path not in optional_sources or not isinstance(exc.__cause__, FileNotFoundError):
+                    raise
+                snapshot = _RegularFileSnapshot(path, b"", hashlib.sha256(b"").hexdigest(), 0, 0, 0)
+                missing.append(path)
+            snapshots.append(snapshot)
         return cls(
             profile_config=profile_config,
             sources=tuple(
@@ -3316,6 +3327,7 @@ class ConfigInputs:
                 )
                 for snapshot in snapshots
             ),
+            missing_sources=tuple(missing),
         )
 
     def __post_init__(self) -> None:
@@ -3416,6 +3428,20 @@ class ConfigInputs:
                 "parity.config.inputs_invalid",
                 "Parity config source states are incomplete.",
             )
+        missing_sources = tuple(self.missing_sources)
+        if (
+            len(set(missing_sources)) != len(missing_sources)
+            or any(path == profile_config or path not in seen_paths for path in missing_sources)
+            or any(
+                self.expected_sha256(path) != hashlib.sha256(b"").hexdigest()
+                or self.expected_state(path) != (0, 0, 0)
+                for path in missing_sources
+            )
+        ):
+            raise ParityValidationError(
+                "parity.config.inputs_invalid", "Absent shared config evidence is invalid."
+            )
+        object.__setattr__(self, "missing_sources", tuple(sorted(missing_sources, key=str)))
         object.__setattr__(self, "profile_config", profile_config)
         object.__setattr__(
             self,
@@ -3643,14 +3669,25 @@ def _read_parity_config_source(
     path: Path,
     expected_sha256: str,
     _source_observer: Callable[[str, Path], None] | None,
+    allow_missing: bool = False,
 ) -> _ParityConfigSource:
     try:
         before = path.lstat()
+    except FileNotFoundError as exc:
+        if allow_missing and expected_sha256 == hashlib.sha256(b"").hexdigest():
+            return _ParityConfigSource(path, b"", expected_sha256, (0, 0, 0, 0, 0, 0))
+        raise ParityValidationError(
+            "parity.config.source_unsafe", "Config source cannot be inspected safely."
+        ) from exc
     except OSError as exc:
         raise ParityValidationError(
             "parity.config.source_unsafe",
             "Config source cannot be inspected safely.",
         ) from exc
+    if allow_missing:
+        raise ParityValidationError(
+            "parity.config.source_stale", "Config source changed from absent to present."
+        )
     if not stat.S_ISREG(before.st_mode):
         raise ParityValidationError(
             "parity.config.source_unsafe",
@@ -3906,6 +3943,7 @@ def prepare_parity_config_projection(
                 path=path,
                 expected_sha256=expected_sha256,
                 _source_observer=_source_observer,
+                allow_missing=path in config_inputs.missing_sources,
             )
             document = _parse_parity_config_source(source)
         except ParityValidationError as exc:
@@ -3989,6 +4027,7 @@ def prepare_parity_config_projection(
                 path=path,
                 expected_sha256=source.payload_sha256,
                 _source_observer=None,
+                allow_missing=path in config_inputs.missing_sources,
             )
         except ParityValidationError as exc:
             return _config_projection_failure(
@@ -4008,7 +4047,7 @@ def prepare_parity_config_projection(
     changed_paths = tuple(
         path
         for path, payload in payloads
-        if payload != sources[path].payload
+        if payload != sources[path].payload or path in config_inputs.missing_sources
     )
     return ConfigProjection(
         config_inputs=config_inputs,
@@ -8548,6 +8587,7 @@ def _revalidate_preparation_fingerprints(
             path
             for path, _digest in source_config.sources
         ),
+        optional_sources=source_config.missing_sources,
     )
     if refreshed_config != source_config:
         raise ParityValidationError(
@@ -8785,11 +8825,18 @@ def prepare_parity_bundle(
             probe_config_path,
             probe_config_payload,
         )
+        official_effective_home = candidate.official_binding.codex_home
+        if official_effective_home / "config.toml" in candidate.source_config.missing_sources:
+            # Probe the planned empty configuration without creating the target
+            # home before transactional publication.
+            official_effective_home = probe_root / "official-effective"
+            official_effective_home.mkdir(mode=0o700)
+            _write_private_staged_payload(official_effective_home / "config.toml", b"")
         official_features = collect_feature_inventory(
             side="official",
             cli_path=candidate.official_binding.backend_cli,
             isolated_home=official_isolated_home,
-            effective_home=candidate.official_binding.codex_home,
+            effective_home=official_effective_home,
             runner=_feature_runner,
             timeout_seconds=timeouts.command_seconds,
             max_output_bytes=timeouts.feature_output_bytes,
@@ -9184,6 +9231,12 @@ def _revalidate_parity_bundle_inputs(
         for path, expected_sha256 in (
             bundle.config_projection.config_inputs.sources
         ):
+            if path in bundle.config_projection.config_inputs.missing_sources:
+                _read_parity_config_source(
+                    path=path, expected_sha256=expected_sha256,
+                    _source_observer=None, allow_missing=True,
+                )
+                continue
             observed = _regular_file_snapshot(
                 path,
                 code="parity.bundle.candidate_stale",

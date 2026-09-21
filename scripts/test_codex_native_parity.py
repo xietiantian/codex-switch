@@ -18,71 +18,76 @@ BACKEND = os.environ.get("CODEX_SWITCH_TEST_BACKEND")
 FIXTURES = Path(__file__).resolve().parent.parent / "evals" / "fixtures"
 
 
+def start_loopback_server(requests: list[dict]):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_args) -> None:
+            pass
+
+        def do_POST(self) -> None:
+            if len(requests) >= 12:
+                self.send_error(500, "unexpected test conversation")
+                return
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append(body)
+            inputs = body.get("input", [])
+            parent = any(
+                "Use the v2 collaboration tool" in json.dumps(item)
+                for item in inputs if item.get("role") == "user"
+            )
+            text = "parity-parent-ok" if parent else "parity-subagent-ok"
+            item = {
+                "id": "msg_1", "type": "message", "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": text, "annotations": []}],
+            }
+            if parent and not any(i.get("type") == "function_call_output" for i in inputs):
+                item = {
+                    "id": "fc_spawn", "type": "function_call",
+                    "namespace": "collaboration", "name": "spawn_agent",
+                    "call_id": "call_spawn",
+                    "arguments": json.dumps({
+                        "task_name": "parity_probe", "agent_type": "explorer",
+                        "fork_turns": "none", "message": "Return exactly parity-subagent-ok.",
+                    }),
+                }
+            elif parent and not any(i.get("call_id") == "call_wait" for i in inputs):
+                item = {
+                    "id": "fc_wait", "type": "function_call",
+                    "namespace": "collaboration", "name": "wait_agent",
+                    "call_id": "call_wait", "arguments": '{"timeout_ms":10000}',
+                }
+            response_id = f"resp_{len(requests)}"
+            events = [
+                {"type": "response.created", "response": {"id": response_id}},
+                {"type": "response.output_item.added", "output_index": 0, "item": item},
+                {"type": "response.output_item.done", "output_index": 0, "item": item},
+                {"type": "response.completed", "response": {
+                    "id": response_id, "status": "completed", "output": [item],
+                    "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+                }},
+            ]
+            payload = "".join(
+                f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
+                for event in events
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
 @unittest.skipUnless(BACKEND, "set CODEX_SWITCH_TEST_BACKEND to an explicit test CLI")
 class NativeParityTests(unittest.TestCase):
     def test_real_core_and_typed_v2_with_local_provider(self) -> None:
         requests: list[dict] = []
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *_args) -> None:
-                pass
-
-            def do_POST(self) -> None:
-                if len(requests) >= 12:
-                    self.send_error(500, "unexpected test conversation")
-                    return
-                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                requests.append(body)
-                inputs = body.get("input", [])
-                parent = any(
-                    "Use the v2 collaboration tool" in json.dumps(item)
-                    for item in inputs if item.get("role") == "user"
-                )
-                text = "parity-parent-ok" if parent else "parity-subagent-ok"
-                item = {
-                    "id": "msg_1", "type": "message", "role": "assistant",
-                    "status": "completed",
-                    "content": [{"type": "output_text", "text": text, "annotations": []}],
-                }
-                if parent and not any(i.get("type") == "function_call_output" for i in inputs):
-                    item = {
-                        "id": "fc_spawn", "type": "function_call",
-                        "namespace": "collaboration", "name": "spawn_agent",
-                        "call_id": "call_spawn",
-                        "arguments": json.dumps({
-                            "task_name": "parity_probe", "agent_type": "explorer",
-                            "fork_turns": "none", "message": "Return exactly parity-subagent-ok.",
-                        }),
-                    }
-                elif parent and not any(i.get("call_id") == "call_wait" for i in inputs):
-                    item = {
-                        "id": "fc_wait", "type": "function_call",
-                        "namespace": "collaboration", "name": "wait_agent",
-                        "call_id": "call_wait", "arguments": '{"timeout_ms":10000}',
-                    }
-                response_id = f"resp_{len(requests)}"
-                events = [
-                    {"type": "response.created", "response": {"id": response_id}},
-                    {"type": "response.output_item.added", "output_index": 0, "item": item},
-                    {"type": "response.output_item.done", "output_index": 0, "item": item},
-                    {"type": "response.completed", "response": {
-                        "id": response_id, "status": "completed", "output": [item],
-                        "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-                    }},
-                ]
-                payload = "".join(
-                    f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
-                    for event in events
-                ).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
+        server, thread = start_loopback_server(requests)
         try:
             with tempfile.TemporaryDirectory(prefix="codex-parity-native-") as tmp:
                 root = Path(tmp)

@@ -1480,6 +1480,7 @@ _RUNTIME_BINDING_BUNDLE_REQUIRED_ROLES = frozenset(
 )
 _RUNTIME_BINDING_BUNDLE_OPTIONAL_ROLES = frozenset(
     {
+        "official_manifest",
         "shared_config",
         "active_runtime_config",
         "parity_internal_model_source",
@@ -1501,6 +1502,7 @@ _RUNTIME_BINDING_BUNDLE_ACTIVATION_ORDER = (
     "profile_config",
     "active_runtime_config",
     "launcher",
+    "official_manifest",
     "manifest",
 )
 _MAX_RUNTIME_REBIND_MARKER_BYTES = (
@@ -1538,16 +1540,16 @@ class RuntimeBindingExecutableSwap:
 
 
 def _runtime_binding_bundle_expected_paths(store: Store) -> dict[str, Path]:
+    from codex_switch_home_select import resolve_runtime_homes
+
+    homes = resolve_runtime_homes(store)
     profile_dir = store.profile_dir("internal")
     launcher = store.bin_dir / "codex-internal-app"
     parity_dir = profile_dir / "parity"
-    internal_home = (
-        Path(store.internal_codex_home)
-        if store.internal_codex_home is not None
-        else store.managed_home("internal")
-    )
+    internal_home = homes.internal.path
     return {
         "manifest": store.manifest_path("internal"),
+        "official_manifest": store.manifest_path("openai-official"),
         "launcher": launcher,
         "capability_receipt": capability_receipt_path_for_launcher(launcher),
         "parity_receipt": parity_dir / "receipt.json",
@@ -1555,7 +1557,7 @@ def _runtime_binding_bundle_expected_paths(store: Store) -> dict[str, Path]:
         "parity_internal_model_source": parity_dir / "internal-model-source.json",
         "parity_official_model_source": parity_dir / "official-model-source.json",
         "profile_config": profile_dir / "config.toml",
-        "shared_config": store.official_codex_home / "config.toml",
+        "shared_config": homes.official.path / "config.toml",
         "active_runtime_config": internal_home / "config.toml",
     }
 
@@ -14104,6 +14106,9 @@ def _execute_switch(
                     (path, f"composite config input {path.name}")
                     for path in composite_builder_paths
                 ),
+                *(([(profile_dir / "parity" / "receipt.json", "prepared parity receipt")])
+                  if config_mode == "shared" and request.profile == "internal"
+                  and internal_manifest.get("parity_receipt_path") else []),
             ]
         )
     )
@@ -14120,13 +14125,34 @@ def _execute_switch(
         config_path,
     )
     uses_file_auth = config_uses_file_auth(profile_config_text)
+    parity_projection = None
     if config_mode == "shared" and request.profile == "internal":
+        if internal_manifest.get("parity_receipt_path"):
+            from codex_switch_parity import ConfigInputs, prepare_parity_config_projection
+
+            parity_projection = prepare_parity_config_projection(
+                config_inputs=ConfigInputs.capture(
+                    profile_config=config_path,
+                    source_paths=(config_path, homes.official.path / "config.toml"),
+                ),
+                overlay_path=profile_dir / "parity" / "model-catalog.json",
+            )
+            if not parity_projection.healthy or parity_projection.changed_paths:
+                raise SwitchError(
+                    "Prepared internal configuration changed; run set-bin internal "
+                    "with the current backend before switching."
+                )
         target_config_text = build_internal_home_config(
             homes.official.path,
             request.profile,
             target_config_path,
             config_path,
+            config_projection=parity_projection,
         )
+        if parity_projection is not None:
+            from codex_switch_verify import validate_prepared_parity_config
+
+            validate_prepared_parity_config(store, parity_projection, target_config_text.encode())
         writes_auth = False
         removes_auth = True
     elif config_mode == "shared":
@@ -14170,6 +14196,11 @@ def _execute_switch(
             ),
             request.profile,
         )
+        if parity_projection is not None:
+            # The receipt binds the exact prepared profile, including shared
+            # preferences and feature/catalog projection. Do not reduce it to
+            # a profile seed after preparing the runtime from those bytes.
+            canonical_profile_text = parity_projection.payload_for(config_path).decode("utf-8")
         plugin_snapshot_text = build_preserved_shared_config_text_from_text(
             target_config_text,
             f"plugin support snapshot for {request.profile}",

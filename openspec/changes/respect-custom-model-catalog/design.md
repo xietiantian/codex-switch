@@ -6,6 +6,75 @@ preparation, policy evaluation, receipt load/revalidation, and the existing
 profile-update transaction are the approved verification seams. No installed
 workstation state or external provider is used for testing.
 
+## Approved lifecycle correction (2026-09-21)
+
+Baseline: 757c0cd. The requester approved final configuration capture followed
+by same-binary preparation and a verified switch, including the home-selection
+and rematerialization failures found by isolated acceptance. Previous model
+source results remain valid for their tested scope; they did not prove this
+command sequence. Continue this original change without weakening evidence.
+
+Target State: `capture -> set-bin internal -> switch -> verify` preserves a
+complete, current parity receipt when the captured configuration and binaries
+are compatible. Cover an active adopted internal home, separate managed
+official home, and first activation with no official runtime configuration.
+Public command handlers, parity projection/preparation, transaction recovery,
+and verification are the approved test seams. No live install, provider call,
+Desktop process mutation, credentials, model selection or release is in scope.
+
+Architecture and critical path:
+
+1. Reuse independent-home selection for rebind preparation and verification.
+   A legacy live-home argument must not alias the official reference to an
+   adopted internal runtime when the official profile has a separate binding.
+   Freeze selected home bindings; publish required binding metadata with the
+   existing recoverable rebind bundle. Preserve explicit collision rejection.
+2. Only an absent official runtime config may start as an empty shared input.
+   Represent absence explicitly, revalidate it through projection and promotion,
+   and publish the prepared shared file transactionally. A missing profile,
+   malformed/present unsafe source, concurrent file creation, or changed binding
+   still fails. Do not fabricate model data or copy auth/provider configuration.
+3. A switch with prepared parity must use the same canonical profile projection
+   as preparation. Preserve the prepared profile bytes and deterministic runtime
+   generation, including managed catalog and feature settings. Changed inputs
+   or an unhealthy projection must not be blessed by the old receipt. Extend
+   existing frozen switch dependencies for any newly read evidence.
+4. Verify active and first-activation lifecycles, repeated switching, config
+   drift, missing/unsafe shared sources, explicit home collisions, and failed
+   rebind rollback. Keep capture invalidation and all original source/protocol/
+   model checks. No new command or skip-validation flag is introduced.
+
+Primary owns the implementation. Write set: codex_switch_bindings.py,
+codex_switch_home_select.py, codex_switch_home_sync.py, codex_switch_parity.py,
+codex_switch_verify.py, codex_switch_transaction.py; focused tests; README;
+this change, synchronized spec, TASK_LEDGER.md, workflow state and evidence.
+Reviewers have read-only Spec and Standards contracts and no source ownership.
+
+Completion requires focused RED/GREEN, parity/runtime-binding/transaction and
+profile regressions, isolated native command sequence, strict OpenSpec, source
+and committed-package checks, two-axis review, and delivery to the existing PR.
+Rollback uses the existing rebind/switch journals; a failed preparation leaves
+all prior bindings and configuration intact. The initial target is source/PR
+delivery; isolated probes do not establish live provider/Desktop acceptance.
+
+Execution is auto-until-terminal within this approved boundary. Dependency,
+credential, public bypass or live mutation requests are new authority deltas.
+No implementation provider or DevFlow refresh is selected. The copied local
+skills and these canonical records remain the workflow fallback where the
+repository has no higher-level dependency-diagnostic executable.
+
+Generated artifacts: new tests own temporary roots from allocation through
+cleanup after their children exit; retain diagnostics with the prefix
+`.planning/devflow/verification/local/parity-lifecycle-`. Never reclaim
+unrelated or pre-existing artifacts. Record reviewer contracts before dispatch.
+
+Routing: Full OpenSpec, final approved refinement; capability research used
+(current source and isolated native command evidence), decision resolution used
+(approved sequence and failure boundaries), grilling skipped (no public product
+choice), implementation planning used (this addendum), architecture guidance
+used (existing home/projection/transaction boundaries), domain modeling skipped
+(existing terms), TDD and OpenSpec routing used. No model-policy expansion.
+
 ## Initial implementation decisions (historical; corrected below)
 
 1. The current preparation path already requires a complete explicit provider

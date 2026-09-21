@@ -28,6 +28,7 @@ from codex_switch_launch import read_launch_agent_cli_path
 from codex_switch_paths import equivalent_paths, profile_app_cli_path
 from codex_switch_parity import (
     MAX_PARITY_RECEIPT_BYTES,
+    ConfigProjection,
     ParityReceipt,
     ParityReport,
     ParityValidationError,
@@ -1924,9 +1925,17 @@ def _validate_parity_fingerprints(
             "Parity source catalog changed after preparation.",
         )
 
+    from codex_switch_home_select import resolve_runtime_homes
+
+    try:
+        official_home = resolve_runtime_homes(store).official.path
+    except SwitchError as exc:
+        raise ParityValidationError(
+            "parity.config.source_stale", "Parity runtime home binding is invalid."
+        ) from exc
     config_paths = {
         "profile": store.profile_dir("internal") / "config.toml",
-        "shared": store.official_codex_home / "config.toml",
+        "shared": official_home / "config.toml",
         "runtime": binding.codex_home / "config.toml",
     }
     for name, expected_sha256 in internal.config_sha256s:
@@ -1944,6 +1953,41 @@ def _validate_parity_fingerprints(
                 "parity.config.source_stale",
                 f"Parity {name} config changed after preparation.",
             )
+
+
+def validate_prepared_parity_config(
+    store: Store,
+    projection: ConfigProjection,
+    runtime_payload: bytes,
+) -> None:
+    """Reject changed prepared inputs before activation writes any state."""
+    manifest = store.load_manifest("internal")
+    profile_dir = store.profile_dir("internal")
+    receipt_path = profile_dir / "parity" / "receipt.json"
+    if manifest.get("parity_receipt_path") != str(receipt_path):
+        raise ParityValidationError("parity.receipt.malformed", "Parity receipt path is invalid.")
+    candidate = _read_parity_receipt_candidate(receipt_path)
+    artifact = load_parity_receipt_artifact(
+        profile_dir=profile_dir,
+        expected_payload_sha256=manifest.get("parity_receipt_sha256", ""),
+        expected_official_reference=candidate.official_reference,
+        expected_internal_fingerprint=candidate.internal_fingerprint,
+        expected_adapter_rule_set_sha256=protocol_adapter_rule_set_digest(),
+    )
+    config_hashes = {
+        "profile" if path == projection.config_inputs.profile_config else "shared":
+        hashlib.sha256(payload).hexdigest()
+        for path, payload in projection.payloads
+    }
+    config_hashes["runtime"] = hashlib.sha256(runtime_payload).hexdigest()
+    if (
+        not artifact.receipt.healthy
+        or config_hashes != dict(artifact.receipt.internal_fingerprint.config_sha256s)
+    ):
+        raise ParityValidationError(
+            "parity.config.source_stale",
+            "Prepared parity configuration changed; run set-bin internal with the current backend before switching.",
+        )
 
 
 def _runtime_generation_parity_error(

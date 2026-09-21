@@ -2967,6 +2967,7 @@ class RuntimeBindingTests(unittest.TestCase):
             }
             expected_paths = {
                 "manifest": store.manifest_path("internal"),
+                "official_manifest": store.manifest_path("openai-official"),
                 "launcher": store.bin_dir / "codex-internal-app",
                 "capability_receipt": (
                     store.bin_dir
@@ -2996,6 +2997,10 @@ class RuntimeBindingTests(unittest.TestCase):
                 role: getattr(artifact, "payload", None)
                 for role, artifact in by_role.items()
             }
+            self.assertEqual(
+                json.loads(actual_payloads["official_manifest"])["codex_home"],
+                str(store.official_codex_home),
+            )
             manifest_payload = actual_payloads.get("manifest")
             manifest = (
                 json.loads(manifest_payload)
@@ -3142,6 +3147,7 @@ class RuntimeBindingTests(unittest.TestCase):
                     "capability_receipt",
                     "launcher",
                     "manifest",
+                    "official_manifest",
                     "parity_overlay",
                     "parity_receipt",
                     "profile_config",

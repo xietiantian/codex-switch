@@ -398,3 +398,20 @@ def resolve_independent_homes(
             official,
         )
     return IndependentHomes(internal=internal, official=official, manifest_updates=updates)
+
+
+def resolve_runtime_homes(store: Store) -> IndependentHomes:
+    """Resolve the same independent homes for noninteractive preparation/readers."""
+    manifests = {}
+    for profile in ("internal", "openai-official"):
+        path = store.manifest_path(profile)
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            manifests[profile] = {}
+        else:
+            manifests[profile] = store.load_manifest(profile)
+    return resolve_independent_homes(
+        store, manifests["internal"], manifests["openai-official"],
+        target_profile="internal", dry_run=True,
+    )

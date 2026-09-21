@@ -329,6 +329,20 @@ reviewing the findings, an explicit
 through the same staged `set-bin internal <current-backend>` rebind; it does not
 patch the receipt, overlay, config, launcher, or manifest in place.
 
+After changing configuration and recapturing `internal`, run
+`set-bin internal <current-backend>` before activating the internal Desktop
+profile. Capture replaces the profile snapshot; a fresh rebind validates that
+snapshot and regenerates its receipts, even when the binary path is unchanged.
+Activation preserves the prepared configuration, so repeated switches retain
+valid evidence. Further edits still require another rebind.
+
+Rebinding uses the same independent home selection as switching. A recorded
+official home takes precedence over the legacy `--live-codex-home` alias; an
+adopted internal home never doubles as the official shared-config source.
+For a first setup, an absent official runtime configuration is an explicitly
+empty input and is published transactionally. A present but unreadable or
+invalid configuration, or a file appearing during preparation, remains an error.
+
 With no internal profile and no command at the selected install target,
 `update-internal` performs a first installation. It validates a private candidate
 and publishes the command without overwriting another installation. Existing

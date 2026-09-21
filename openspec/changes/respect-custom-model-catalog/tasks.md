@@ -26,3 +26,10 @@ Owner/write set/evidence contract: design.md. Evidence:
 - [x] 5.2 Persist bundled snapshots transactionally; preserve origin on repeat updates and reject source/binary/cache-selection drift.
 - [x] 5.3 Run negative/native/isolated regressions and independent Spec/Standards reviews; synchronize corrected specs.
 - [x] 5.4 Verify the committed package, push to PR #1, refresh the stable test entrypoint and archive the corrected original change.
+
+## 6. Reopened completion gap: recapture/rebind/switch lifecycle
+- [x] 6.1 Reproduce adopted-home preparation drift and unify effective home selection across preparation, verification and transactional publication.
+- [x] 6.2 Support only absent official runtime configuration with explicit absence evidence and recoverable publication; reject unsafe inputs and races.
+- [x] 6.3 Preserve the parity-prepared profile/runtime projection across first and repeated switches; retain stale-evidence rejection.
+- [x] 6.4 Run isolated lifecycle, drift, rollback, native and broad regressions; complete independent Spec/Standards reviews and synchronize specs.
+- [ ] 6.5 Verify the committed package, push the correction to PR #1, refresh the stable test package and archive the completed original change.

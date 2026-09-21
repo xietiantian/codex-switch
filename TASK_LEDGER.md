@@ -3284,6 +3284,13 @@ record for the bounded local observation.
 
 ## Validation Commands
 
+2026-09-21 lifecycle correction: the reopened original
+`openspec/changes/respect-custom-model-catalog/tasks.md` section 6 is the active
+execution source. Its approved design and
+`.planning/devflow/verification/respect-custom-model-catalog.md` record the
+capture/rebind/activation contract, isolated proof, reviewers and existing PR
+delivery authority. This ledger does not create a second task queue.
+
 ```bash
 VALIDATION_ROOT="$(mktemp -d /private/tmp/codex-switch-validation.XXXXXX)"
 export CODEX_SWITCH_SHELL_PROFILE="$VALIDATION_ROOT/.zshrc"
