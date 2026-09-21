@@ -91,7 +91,8 @@ context_health:
 Namespaced feature grammar repair passes RED/GREEN, 102 parity and 227 profile
 tests, native old/new inventory collection, clean package checks and both
 independent reviews. Seven feature and six protocol differences remain
-separately tracked; no compatibility exception is granted. Delivery is next.
+separately tracked; no compatibility exception is granted. Implementation
+a899eed is pushed to PR #1 and its exact isolated package is verified.
 
 Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
@@ -123,7 +124,8 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Complete namespaced feature verification and update PR #1 plus its local test
-package. The current local package remains pinned to 250c0ca until replacement
-passes isolated verification.
+Await review of the completed namespaced feature repair in PR #1. The local
+test package selects verified implementation a899eed. Further full Desktop
+compatibility work must address the separately recorded feature/protocol
+findings without weakening the current blocking policy.
 Release publication and live installation remain separate.

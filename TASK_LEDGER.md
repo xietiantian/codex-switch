@@ -8,7 +8,8 @@
 - Scope: shared feature-name grammar, public-seam regressions and evidence.
 - Evidence: `.planning/devflow/verification/support-namespaced-feature-keys.md`.
 - Status: RED/GREEN, 102 parity and 227 profile cases, native inventory,
-  installed-package checks and both reviews pass. Authorized delivery is next.
+  installed-package checks and both reviews pass. Implementation a899eed is
+  pushed to PR #1; its verified package and local test runner are refreshed.
 - Feature classifications, live installation and provider requests are excluded.
 
 ## Active Repair: Custom Model Catalog Parity

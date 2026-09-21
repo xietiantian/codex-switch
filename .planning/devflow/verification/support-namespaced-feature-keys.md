@@ -32,9 +32,13 @@ invalid boolean/stage, acceptance traces and blocking unclassified drift.
   over the previous PR package and exercised through installed modules. All
   22 feature/policy/preparation cases passed; status and final package/installed
   manifest checks passed with no bytecode residue.
-- Git transport readback confirms the existing PR branch is still at baseline
-  250c0ca before the authorized push. Delivery and exact-commit package refresh
-  are next.
+- Exact implementation commit a899eed was archived, packaged and installed in
+  a new temporary root. Status, all 22 installed-module feature/policy/preparation
+  tests and package/installed manifests passed. The local test runner now
+  selects this verified package with bytecode and self-update disabled.
+- Native Git pushed a899eed to existing PR #1. The PR description includes the
+  namespace repair, current verification and remaining runtime-pair limits.
+  No release, provider request or live installation was performed.
 
 ## Separate compatibility finding
 
