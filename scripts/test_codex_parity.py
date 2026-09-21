@@ -4555,15 +4555,9 @@ class ParityPreparationTests(unittest.TestCase):
         '{"id":"parity-probe-collaboration","result":{"data":[]}}\n'
         '{"id":"parity-probe-thread","result":{"thread":{"id":"parent"}}}\n'
     )
-    TYPED_SUCCESS = (
-        '{"type":"thread.started","thread_id":"parent"}\n'
-        '{"type":"item.completed","item":{"type":"subagent_spawn",'
-        '"multi_agent_version":"v2","agentRole":"explorer",'
-        '"source":"thread_spawn"}}\n'
-        '{"type":"item.completed","item":{"type":"agent_message",'
-        '"agentRole":"explorer","text":"parity-subagent-ok"}}\n'
-        '{"type":"turn.completed","result":"parity-parent-ok"}\n'
-    )
+    TYPED_SUCCESS = "\n".join(json.dumps(message) for message in json.loads(
+        (Path(__file__).resolve().parent.parent / "evals/fixtures/typed-subagent-app-server.json").read_text()
+    )) + "\n"
 
     def setUp(self) -> None:
         if sys.version_info >= (3, 11):
@@ -4805,7 +4799,7 @@ class ParityPreparationTests(unittest.TestCase):
             )
             self.assertEqual(restored.canonical_bytes, bundle.receipt.canonical_bytes)
             old_policy = json.loads(bundle.receipt.canonical_bytes)
-            old_policy["policy_version"] = "1"
+            old_policy["policy_version"] = "2"
             with self.assertRaises(ParityValidationError) as raised:
                 parity_module.ParityReceipt.from_payload(old_policy)
             self.assertEqual(raised.exception.code, "parity.receipt.policy_unsupported")
@@ -5194,15 +5188,9 @@ class ParityProbeTests(unittest.TestCase):
         '{"id":"parity-probe-collaboration","result":{"data":[]}}\n'
         '{"id":"parity-probe-thread","result":{"thread":{"id":"parent"}}}\n'
     )
-    TYPED_SUCCESS = (
-        '{"type":"thread.started","thread_id":"parent"}\n'
-        '{"type":"item.completed","item":{"type":"subagent_spawn",'
-        '"multi_agent_version":"v2","agentRole":"explorer",'
-        '"source":"thread_spawn"}}\n'
-        '{"type":"item.completed","item":{"type":"agent_message",'
-        '"agentRole":"explorer","text":"parity-subagent-ok"}}\n'
-        '{"type":"turn.completed","result":"parity-parent-ok"}\n'
-    )
+    TYPED_SUCCESS = "\n".join(json.dumps(message) for message in json.loads(
+        (Path(__file__).resolve().parent.parent / "evals/fixtures/typed-subagent-app-server.json").read_text()
+    )) + "\n"
 
     def probe_seams(self) -> dict[str, object]:
         seams = {
@@ -5388,9 +5376,9 @@ class ParityProbeTests(unittest.TestCase):
             ],
         )
         typed_request = runner.requests[1]
-        self.assertEqual("exec", typed_request.command[1])
+        self.assertEqual("app-server", typed_request.command[1])
         self.assertIn("explorer", typed_request.command[-1])
-        self.assertIn("parity-subagent-ok", typed_request.command[-1])
+        self.assertEqual(core_request.stdin_messages, typed_request.stdin_messages)
 
     def test_typed_explorer_v2_markers_are_required_for_success(self) -> None:
         seams = self.probe_seams()
@@ -5419,22 +5407,141 @@ class ParityProbeTests(unittest.TestCase):
             report.receipt_results,
         )
 
+    def test_core_transport_waits_for_replies_before_more_requests_or_eof(self) -> None:
+        seams = self.probe_seams()
+        script = (
+            f"#!{sys.executable}\n"
+            "import json, select, sys, time\n"
+            "if '-c' not in sys.argv:\n"
+            "    for line in sys.stdin:\n"
+            "        request = json.loads(line)\n"
+            "        if 'id' not in request:\n"
+            "            continue\n"
+            "        time.sleep(0.03)\n"
+            "        if select.select([sys.stdin], [], [], 0)[0]:\n"
+            "            raise SystemExit(2)\n"
+            "        print(json.dumps({'id': request['id'], 'result': {}}), flush=True)\n"
+            "else:\n"
+            f"    print({self.TYPED_SUCCESS!r}, end='', flush=True)\n"
+            "    for line in sys.stdin: pass\n"
+        ).encode()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self.inputs(seams, Path(temp_dir), backend_payload=script)
+            report = seams["run_parity_probes"](
+                inputs=inputs, timeout_seconds=5.0, max_output_bytes=4096,
+            )
+        self.assertTrue(report.healthy, report.findings)
+
+    def test_native_app_server_typed_evidence_is_supported(self) -> None:
+        fixture = Path(__file__).resolve().parent.parent / "evals/fixtures/typed-subagent-app-server.json"
+        output = "\n".join(json.dumps(message) for message in json.loads(fixture.read_text())) + "\n"
+        seams = self.probe_seams()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self.inputs(seams, Path(temp_dir))
+            runner = RecordingParityProbeRunner([
+                self.command_result(seams, stdout=self.CORE_SUCCESS),
+                self.command_result(seams, stdout=output),
+            ])
+            report = seams["run_parity_probes"](inputs=inputs, runner=runner)
+        self.assertTrue(report.healthy, report.findings)
+
+    def test_native_typed_identity_and_completion_fail_closed(self) -> None:
+        messages = [json.loads(line) for line in self.TYPED_SUCCESS.splitlines()]
+        cases = []
+        for key, value in (("id", "other-child"), ("parentThreadId", "other-parent"),
+                           ("agentRole", "worker"), ("source", "cli")):
+            changed = json.loads(json.dumps(messages))
+            changed[-1]["result"]["thread"][key] = value
+            cases.append(changed)
+        for index, key, value in ((4, "agentPath", "/root/other"),
+                                   (4, "agentThreadId", "other-child"),
+                                   (5, "text", "wrong-child-marker"),
+                                   (8, "text", "wrong-parent-marker")):
+            changed = json.loads(json.dumps(messages))
+            changed[index]["params"]["item"][key] = value
+            cases.append(changed)
+        for index in (6, 9):
+            changed = json.loads(json.dumps(messages))
+            changed[index]["params"]["turn"]["status"] = "failed"
+            cases.append(changed)
+        for index in (4, 5, 8):
+            changed = json.loads(json.dumps(messages))
+            changed[index]["params"]["turnId"] = "unrelated-turn"
+            cases.append(changed)
+        cases.append(messages + [messages[-1]])
+        for malformed in ({"id": [], "result": {}}, {"type": []},
+                          {"method": "item/completed", "params": {"item": {"type": []}}}):
+            cases.append(messages + [malformed])
+        seams = self.probe_seams()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self.inputs(seams, Path(temp_dir))
+            for index, case in enumerate(cases):
+                with self.subTest(case=index):
+                    runner = RecordingParityProbeRunner([
+                        self.command_result(seams, stdout=self.CORE_SUCCESS),
+                        self.command_result(seams, stdout="\n".join(json.dumps(m) for m in case)),
+                    ])
+                    report = seams["run_parity_probes"](inputs=inputs, runner=runner)
+                    self.assertFalse(report.healthy)
+
+    def test_fragmented_notifications_preserve_completed_typed_replies(self) -> None:
+        messages = [json.loads(line) for line in self.TYPED_SUCCESS.splitlines()]
+        script = (
+            f"#!{sys.executable}\n"
+            "import json, sys, time\n"
+            f"messages = {messages!r}\n"
+            "replies = {m['id']: m for m in messages if 'id' in m}\n"
+            "typed = '-c' in sys.argv\n"
+            "def emit(m): print(json.dumps(m), flush=True)\n"
+            "def fragment():\n"
+            "    sys.stdout.write('{\"method\":'); sys.stdout.flush()\n"
+            "    time.sleep(0.15)\n"
+            "    sys.stdout.write('\"notification\",\"params\":{}}\\n'); sys.stdout.flush()\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    key = request.get('id')\n"
+            "    if key not in replies: continue\n"
+            "    emit(replies[key])\n"
+            "    if key == 'parity-probe-turn':\n"
+            "        for message in messages[4:-1]: emit(message)\n"
+            "    if typed and key in ('parity-probe-thread', 'parity-probe-turn'): fragment()\n"
+        ).encode()
+        seams = self.probe_seams()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self.inputs(seams, Path(temp_dir), backend_payload=script)
+            report = seams["run_parity_probes"](inputs=inputs, timeout_seconds=5)
+        self.assertTrue(report.healthy, report.findings)
+
+    def test_backpressured_large_request_obeys_overall_deadline(self) -> None:
+        script = (
+            f"#!{sys.executable}\n"
+            "import json, os, sys, time\n"
+            "from pathlib import Path\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    if 'id' not in request: continue\n"
+            "    large = '-c' in sys.argv and request['method'] == 'thread/start'\n"
+            "    result = {'thread': {'id': 'x' * 200000 if large else 'parent'}}\n"
+            "    print(json.dumps({'id': request['id'], 'result': result}), flush=True)\n"
+            "    if large:\n"
+            "        (Path(os.environ['CODEX_HOME']) / 'large-id-sent').touch()\n"
+            "        time.sleep(1.5)\n"
+            "        break\n"
+        ).encode()
+        seams = self.probe_seams()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self.inputs(seams, Path(temp_dir), backend_payload=script)
+            report = seams["run_parity_probes"](
+                inputs=inputs, timeout_seconds=0.5, max_output_bytes=256 * 1024,
+            )
+            self.assertTrue((inputs.codex_home / "large-id-sent").is_file())
+        self.assertEqual(self.result_codes(report)[-1], ("typed_subagent_v2", "timeout"))
+
     def test_v1_or_nickname_only_subagent_never_passes(self) -> None:
         seams = self.probe_seams()
-        outputs = (
-            (
-                '{"type":"item.completed","item":{"type":"subagent_spawn",'
-                '"multi_agent_version":"v1","nickname":"random-name"}}\n'
-                '{"type":"item.completed","item":{"type":"agent_message",'
-                '"text":"parity-subagent-ok"}}\n'
-                '{"type":"turn.completed","result":"parity-parent-ok"}\n'
-            ),
-            (
-                '{"type":"item.completed","item":{"type":"subagent_spawn",'
-                '"multi_agent_version":"v1","nickname":"random-name"}}\n'
-                + self.TYPED_SUCCESS
-            ),
-        )
+        messages = [json.loads(line) for line in self.TYPED_SUCCESS.splitlines()]
+        messages[-1]["result"]["thread"]["source"]["subAgent"]["thread_spawn"].pop("agent_path")
+        outputs = ("\n".join(json.dumps(message) for message in messages) + "\n",)
         for output in outputs:
             with self.subTest(output=output):
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -5467,11 +5574,8 @@ class ParityProbeTests(unittest.TestCase):
 
     def test_multiple_v2_subagent_spawns_never_pass(self) -> None:
         seams = self.probe_seams()
-        repeated_spawn = (
-            '{"type":"item.completed","item":{"type":"subagent_spawn",'
-            '"multi_agent_version":"v2","agentRole":"explorer",'
-            '"source":"thread_spawn"}}\n'
-        )
+        messages = [json.loads(line) for line in self.TYPED_SUCCESS.splitlines()]
+        repeated_spawn = json.dumps(messages[4]) + "\n"
         with tempfile.TemporaryDirectory() as temp_dir:
             inputs = self.inputs(seams, Path(temp_dir))
             runner = RecordingParityProbeRunner(
@@ -5498,19 +5602,13 @@ class ParityProbeTests(unittest.TestCase):
 
     def test_typed_subagent_completion_order_is_required(self) -> None:
         seams = self.probe_seams()
-        spawn = (
-            '{"type":"item.completed","item":{"type":"subagent_spawn",'
-            '"multi_agent_version":"v2","agentRole":"explorer",'
-            '"source":"thread_spawn"}}\n'
-        )
-        child = (
-            '{"type":"item.completed","item":{"type":"agent_message",'
-            '"agentRole":"explorer","text":"parity-subagent-ok"}}\n'
-        )
-        parent = (
-            '{"type":"turn.completed","result":"parity-parent-ok"}\n'
-        )
-        for output in (child + spawn + parent, spawn + parent + child):
+        messages = [json.loads(line) for line in self.TYPED_SUCCESS.splitlines()]
+        outputs = []
+        for left, right in ((4, 5), (6, 9)):
+            reordered = list(messages)
+            reordered[left], reordered[right] = reordered[right], reordered[left]
+            outputs.append("\n".join(json.dumps(message) for message in reordered) + "\n")
+        for output in outputs:
             with self.subTest(output=output):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     inputs = self.inputs(seams, Path(temp_dir))
@@ -5867,7 +5965,7 @@ class ParityProbeTests(unittest.TestCase):
                         ),
                         self.command_result(
                             seams,
-                            stdout=outputs["typed_stdout"],
+                            stdout=self.TYPED_SUCCESS,
                             stderr=outputs["typed_stderr"],
                         ),
                     ]

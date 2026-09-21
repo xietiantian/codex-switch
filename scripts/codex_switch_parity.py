@@ -35,7 +35,7 @@ from codex_switch_runtime_binding import (
 )
 
 
-PARITY_POLICY_VERSION = "2"
+PARITY_POLICY_VERSION = "3"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -2304,6 +2304,87 @@ _EXACT_METHOD_COVERAGE_RULES = (
         disposition="optional_extension",
         optional_extension_ids=("local_audio_and_audio",),
     ),
+    _ExactMethodCoverageRule(
+        direction="client_request",
+        method="thread/queue/add",
+        official_schema_sha256=(
+            "52b07c5d01bdc0e58d2efce15cb7c8404ad9c11b6a154adda956001fa7f7ba8d"
+        ),
+        internal_schema_sha256=(
+            "1bf66b604b6b284d334b367462945791e55c9edf186a9ad252ccba5ab06a5820"
+        ),
+        reason_codes=(
+            "parity.protocol.items_incompatible",
+            "parity.protocol.required_field_incompatible",
+        ),
+        disposition="optional_extension",
+        optional_extension_ids=("image_file_reference",),
+    ),
+    _ExactMethodCoverageRule(
+        direction="client_request",
+        method="thread/queue/update",
+        official_schema_sha256=(
+            "3ed4dcef71d50edc84c8e3912e60009f2158d9138901d8ddd7817ccfdecf4747"
+        ),
+        internal_schema_sha256=(
+            "679732c5c7c7bafaf4a1baff5bec2ee219325244eda62b6cbd0b94cab6522184"
+        ),
+        reason_codes=(
+            "parity.protocol.items_incompatible",
+            "parity.protocol.required_field_incompatible",
+        ),
+        disposition="optional_extension",
+        optional_extension_ids=("image_file_reference",),
+    ),
+    _ExactMethodCoverageRule(
+        direction="client_request",
+        method="thread/resume",
+        official_schema_sha256=(
+            "e9035c909d29ecd7e074061c1a3fdbca27cdc91b53644e829fd4d5aa3f2bd5cc"
+        ),
+        internal_schema_sha256=(
+            "5d56e720d9df741def766f4d63562ddd4b3e46aed010512d1bedd4ea6c05f2df"
+        ),
+        reason_codes=(
+            "parity.protocol.enum_incompatible",
+            "parity.protocol.items_incompatible",
+        ),
+        disposition="optional_extension",
+        optional_extension_ids=("image_file_reference",),
+    ),
+    _ExactMethodCoverageRule(
+        direction="client_request",
+        method="turn/start",
+        official_schema_sha256=(
+            "d754c4242ca539c4c0b062c8fd1fdb95867b992dee2ad73d47a36b881db30a9d"
+        ),
+        internal_schema_sha256=(
+            "8cf451912811592ce01af647c516ec903ffda8d50fa97a5e9c8497f1c57804b1"
+        ),
+        reason_codes=(
+            "parity.protocol.items_incompatible",
+            "parity.protocol.required_field_incompatible",
+            "parity.protocol.type_incompatible",
+        ),
+        disposition="optional_extension",
+        optional_extension_ids=("image_file_reference",),
+    ),
+    _ExactMethodCoverageRule(
+        direction="client_request",
+        method="turn/steer",
+        official_schema_sha256=(
+            "bed2e44f53ebda862af149f27a311dc9b16e1ff4297d6b198e06d89c45ad4e79"
+        ),
+        internal_schema_sha256=(
+            "97fcf150a9e85f0d99ef0df1c86139d0f29d48d7bf3e2ad1b16437f8c7c871dd"
+        ),
+        reason_codes=(
+            "parity.protocol.items_incompatible",
+            "parity.protocol.required_field_incompatible",
+        ),
+        disposition="optional_extension",
+        optional_extension_ids=("image_file_reference",),
+    ),
 )
 _EXACT_METHOD_COVERAGE_BY_KEY = MappingProxyType(
     {
@@ -2337,6 +2418,52 @@ def _thread_resume_rule_matches_coverage_contract(
         and rule.variants == _THREAD_RESUME_ADAPTER_CONTRACT["variants"]
         and rule.capability_predicate
         == _THREAD_RESUME_ADAPTER_CONTRACT["capability_predicate"]
+    )
+
+
+def _image_reference_common_contract(
+    entry: ProtocolInventoryComparisonEntry,
+) -> bool:
+    """Prove the URL-only schema contract; never rewrite runtime messages."""
+    if entry.official is None or entry.internal is None:
+        return False
+    projected = 0
+
+    def url_contract(node: object) -> object:
+        nonlocal projected
+        if isinstance(node, (list, tuple)):
+            return [url_contract(child) for child in node]
+        if not isinstance(node, Mapping):
+            return node
+        result = {key: url_contract(value) for key, value in node.items()}
+        properties = result.get("properties")
+        tag = properties.get("type") if isinstance(properties, dict) else None
+        kind = tag.get("enum") if isinstance(tag, dict) else None
+        if kind == ["image"]:
+            reference, url = "fileId", "url"
+        elif kind == ["input_image"]:
+            reference, url = "file_id", "image_url"
+        else:
+            return result
+        branches = result.get("anyOf")
+        expected = [
+            {"type": "object", "properties": {key: {"type": "string"}},
+             "required": [key]}
+            for key in (reference, url)
+        ]
+        if not isinstance(branches, list) or len(branches) != 2 or any(
+            branch not in branches for branch in expected
+        ):
+            return result
+        del result["anyOf"]
+        properties[url] = {"type": "string"}
+        result["required"] = sorted(set(result.get("required", ())) | {url})
+        projected += 1
+        return result
+
+    common = url_contract(entry.official.schema)
+    return projected > 0 and not _protocol_schema_subset_reasons(
+        common, entry.internal.schema
     )
 
 
@@ -2389,7 +2516,10 @@ def build_method_coverage(
             entry.reason_codes,
         )
         exact = _EXACT_METHOD_COVERAGE_BY_KEY.get(lookup_key)
-        if exact is None:
+        if exact is None or (
+            "image_file_reference" in exact.optional_extension_ids
+            and not _image_reference_common_contract(entry)
+        ):
             records.append(
                 MethodCoverageRecord(
                     direction=entry.direction,
@@ -2921,12 +3051,14 @@ class ParityAcceptanceTrace:
 
 _CURRENT_PARITY_ACCEPTANCE_TRACE = ParityAcceptanceTrace(
     schema_version=1,
-    trace_id="official-desktop-core-v1",
+    trace_id="official-desktop-core-v2",
     observed_protocol_methods=(
         ("client_request", "collaborationMode/list"),
         ("client_request", "initialize"),
+        ("client_request", "thread/read"),
         ("client_request", "thread/resume"),
         ("client_request", "thread/start"),
+        ("client_request", "turn/start"),
     ),
     observed_features=("multi_agent_v2",),
     item_ids_observed_dependencies=(
@@ -4384,9 +4516,136 @@ def _terminate_parity_probe_process_group(
     return not _probe_process_group_exists(process.pid)
 
 
+def _captured_probe_messages(
+    capture: _BoundedCapture,
+) -> tuple[Mapping[str, object], ...] | None:
+    output, truncated = capture.render()
+    if truncated:
+        return None
+    return _probe_json_lines(output.rpartition("\n")[0])
+
+
+def _wait_for_probe_message(
+    process: subprocess.Popen[bytes],
+    capture: _BoundedCapture,
+    matches: Callable[[Mapping[str, object]], bool],
+    deadline: float,
+) -> Mapping[str, object] | None:
+    while True:
+        messages = _captured_probe_messages(capture)
+        if messages is None:
+            return None
+        for message in messages:
+            if matches(message):
+                return message
+        if process.poll() is not None:
+            return None
+        if time.monotonic() >= deadline:
+            raise subprocess.TimeoutExpired(process.args, 0)
+        time.sleep(0.01)
+
+
+def _send_probe_message(
+    process: subprocess.Popen[bytes],
+    capture: _BoundedCapture,
+    message: Mapping[str, object],
+    deadline: float,
+) -> Mapping[str, object] | None:
+    assert process.stdin is not None
+    descriptor = process.stdin.fileno()
+    os.set_blocking(descriptor, False)
+    payload = _canonical_json_bytes(message) + b"\n"
+    offset = 0
+    while offset < len(payload):
+        if time.monotonic() >= deadline:
+            raise subprocess.TimeoutExpired(process.args, 0)
+        try:
+            written = os.write(descriptor, payload[offset:offset + 4096])
+        except BlockingIOError:
+            time.sleep(0.01)
+            continue
+        if written == 0:
+            raise BrokenPipeError("Parity probe input closed")
+        offset += written
+    if "id" not in message:
+        return None
+    return _wait_for_probe_message(
+        process, capture, lambda reply: reply.get("id") == message["id"], deadline
+    )
+
+
+def _probe_mapping(value: object, *keys: str) -> Mapping[str, object]:
+    for key in keys:
+        if not isinstance(value, Mapping):
+            return {}
+        value = value.get(key)
+    return value if isinstance(value, Mapping) else {}
+
+
+def _complete_typed_probe(
+    process: subprocess.Popen[bytes],
+    capture: _BoundedCapture,
+    deadline: float,
+) -> None:
+    messages = _captured_probe_messages(capture) or ()
+    thread_reply = next(
+        (m for m in messages if m.get("id") == _PARITY_PROBE_CORE_IDS[2]), {}
+    )
+    parent = _probe_mapping(thread_reply, "result", "thread").get("id")
+    if not isinstance(parent, str) or not parent:
+        return
+    turn_reply = _send_probe_message(
+        process, capture,
+        {
+            "id": "parity-probe-turn",
+            "method": "turn/start",
+            "params": {
+                "threadId": parent,
+                "input": [{"type": "text", "text": _PARITY_PROBE_PROMPT}],
+            },
+        },
+        deadline,
+    )
+    if turn_reply is None or "error" in turn_reply:
+        return
+    completed = _wait_for_probe_message(
+        process, capture,
+        lambda m: (
+            m.get("method") == "turn/completed"
+            and _probe_mapping(m, "params").get("threadId") == parent
+        ),
+        deadline,
+    )
+    if completed is None:
+        return
+    messages = _captured_probe_messages(capture) or ()
+    children = []
+    for message in messages:
+        params = _probe_mapping(message, "params")
+        item = _probe_mapping(params, "item")
+        if (
+            message.get("method") == "item/completed"
+            and params.get("threadId") == parent
+            and item.get("type") == "subAgentActivity"
+            and item.get("kind") == "started"
+        ):
+            children.append(item.get("agentThreadId"))
+    if len(children) == 1 and isinstance(children[0], str) and children[0]:
+        _send_probe_message(
+            process, capture,
+            {
+                "id": "parity-probe-child",
+                "method": "thread/read",
+                "params": {"threadId": children[0], "includeTurns": False},
+            },
+            deadline,
+        )
+
+
 def _run_parity_probe_command(
     request: ParityProbeRequest,
 ) -> ParityProbeCommandResult:
+    command_deadline = time.monotonic() + request.timeout_seconds
     environment = dict(os.environ)
     environment["CODEX_HOME"] = str(request.codex_home)
     stdin = subprocess.PIPE if request.stdin_messages else subprocess.DEVNULL
@@ -4422,23 +4681,32 @@ def _run_parity_probe_command(
     )
     for thread in threads:
         thread.start()
-    if request.stdin_messages and process.stdin is not None:
-        try:
+    timed_out = False
+    process_group_terminated = False
+    try:
+        if request.stdin_messages and process.stdin is not None:
             for message in request.stdin_messages:
-                process.stdin.write(
-                    _canonical_json_bytes(message) + b"\n"
-                )
-            process.stdin.flush()
+                # EOF shuts down current asynchronous app-server dispatch.
+                reply = _send_probe_message(process, stdout_capture, message, command_deadline)
+                if "id" in message and (reply is None or "error" in reply):
+                    break
+            else:
+                if request.name == "typed_subagent_v2":
+                    _complete_typed_probe(process, stdout_capture, command_deadline)
             process.stdin.close()
-        except (BrokenPipeError, OSError):
+        process.wait(timeout=max(0.0, command_deadline - time.monotonic()))
+    except (BrokenPipeError, OSError):
+        if process.stdin is not None:
             try:
                 process.stdin.close()
             except OSError:
                 pass
-    timed_out = False
-    process_group_terminated = False
-    try:
-        process.wait(timeout=request.timeout_seconds)
+        # Reap a peer that closed its input without escaping the same bound.
+        try:
+            process.wait(timeout=max(0.0, command_deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            process_group_terminated = _terminate_parity_probe_process_group(process)
     except subprocess.TimeoutExpired:
         timed_out = True
         process_group_terminated = _terminate_parity_probe_process_group(
@@ -4477,7 +4745,8 @@ def _run_parity_probe_command(
 _PARITY_PROBE_PARENT_MARKER = "parity-parent-ok"
 _PARITY_PROBE_CHILD_MARKER = "parity-subagent-ok"
 _PARITY_PROBE_PROMPT = (
-    "Use the v2 collaboration tool to spawn exactly one explorer subagent. "
+    "Use the v2 collaboration tool to spawn exactly one explorer subagent "
+    "named parity_probe with fork_turns=none. "
     "Ask the child to return exactly parity-subagent-ok. After the child "
     "completes, return exactly parity-parent-ok."
 )
@@ -4515,7 +4784,8 @@ def _probe_requests(
         {
             "id": _PARITY_PROBE_CORE_IDS[2],
             "method": "thread/start",
-            "params": {"cwd": str(inputs.workspace)},
+            "params": {"cwd": str(inputs.workspace), "ephemeral": True,
+                       "approvalPolicy": "never", "sandbox": "read-only"},
         },
     )
     return (
@@ -4535,21 +4805,12 @@ def _probe_requests(
             name="typed_subagent_v2",
             command=(
                 str(inputs.backend_cli),
-                "exec",
-                "--json",
-                "--ephemeral",
-                "--ignore-rules",
-                "--skip-git-repo-check",
+                "app-server",
                 "-c",
-                'approval_policy="never"',
-                "-s",
-                "read-only",
-                "-C",
-                str(inputs.workspace),
-                _PARITY_PROBE_PROMPT,
+                'agents.explorer.description="Read-only parity probe explorer"',
             ),
             codex_home=inputs.codex_home,
-            stdin_messages=(),
+            stdin_messages=core_messages,
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
         ),
@@ -4591,6 +4852,17 @@ def _probe_json_lines(stdout: str) -> tuple[Mapping[str, object], ...] | None:
             return None
         if not isinstance(message, dict):
             return None
+        if any(
+            key in message and not isinstance(message[key], str)
+            for key in ("method", "type")
+        ) or ("id" in message and type(message["id"]) not in (str, int)):
+            return None
+        for item in (
+            _probe_mapping(message, "item"),
+            _probe_mapping(message, "params", "item"),
+        ):
+            if "type" in item and not isinstance(item["type"], str):
+                return None
         messages.append(message)
     return tuple(messages)
 
@@ -4676,49 +4948,130 @@ def _evaluate_typed_probe(
     messages = _probe_json_lines(command_result.stdout)
     if messages is None:
         return "malformed_output", MappingProxyType({})
-    spawns: list[tuple[int, Mapping[str, object]]] = []
-    child_completions: list[int] = []
-    parent_completions: list[int] = []
-    for index, message in enumerate(messages):
-        item = message.get("item")
-        if isinstance(item, Mapping):
-            item_type = item.get("type")
-            if item_type in {
-                "subagent_spawn",
-                "agent_spawn",
-                "collaboration_tool_call",
-            }:
-                spawns.append((index, item))
-            if (
-                item_type == "agent_message"
-                and item.get("agentRole") == "explorer"
-                and item.get("text") == _PARITY_PROBE_CHILD_MARKER
-            ):
-                child_completions.append(index)
-        if (
-            message.get("type") == "turn.completed"
-            and message.get("result") == _PARITY_PROBE_PARENT_MARKER
-        ):
-            parent_completions.append(index)
+    core_code, _semantic = _evaluate_core_probe(
+        command_result, max_output_bytes=max_output_bytes
+    )
+    if core_code != "passed":
+        return core_code, MappingProxyType({})
+    # exec JSON loses role/source information. Only native app-server evidence
+    # bound to this parent/child conversation may establish typed-v2 success.
     if any(
-        spawn.get("multi_agent_version") == "v1"
-        for _index, spawn in spawns
+        _probe_mapping(m, "item").get("multi_agent_version") == "v1"
+        for m in messages
     ):
         return "v1_fallback", MappingProxyType({})
-    if (
-        len(spawns) != 1
-        or len(child_completions) != 1
-        or len(parent_completions) != 1
+    if any(
+        m.get("type") in {"item.completed", "turn.completed"}
+        for m in messages
     ):
         return "typed_subagent_missing", MappingProxyType({})
-    spawn_index, spawn = spawns[0]
-    child_index = child_completions[0]
-    parent_index = parent_completions[0]
+    replies = {m.get("id"): m for m in messages if "id" in m}
+    if any(
+        sum(m.get("id") == request_id for m in messages) != 1
+        for request_id in ("parity-probe-turn", "parity-probe-child")
+    ):
+        return "typed_subagent_missing", MappingProxyType({})
+    parent = _probe_mapping(
+        replies.get(_PARITY_PROBE_CORE_IDS[2]), "result", "thread"
+    ).get("id")
+    child_record = _probe_mapping(
+        replies.get("parity-probe-child"), "result", "thread"
+    )
+    child = child_record.get("id")
+    source = _probe_mapping(child_record, "source", "subAgent", "thread_spawn")
     if (
-        spawn.get("multi_agent_version") != "v2"
-        or spawn.get("agentRole") != "explorer"
-        or spawn.get("source") != "thread_spawn"
-        or not spawn_index < child_index < parent_index
+        not all(isinstance(value, str) and value for value in (parent, child))
+        or parent == child
+    ):
+        return "typed_subagent_missing", MappingProxyType({})
+    if source and not source.get("agent_path"):
+        return "v1_fallback", MappingProxyType({})
+    if (
+        child_record.get("parentThreadId") != parent
+        or child_record.get("agentRole") != "explorer"
+        or source.get("parent_thread_id") != parent
+        or source.get("agent_role") != "explorer"
+        or type(source.get("depth")) is not int
+        or source.get("depth") != 1
+        or source.get("agent_path") != "/root/parity_probe"
+    ):
+        return "typed_subagent_missing", MappingProxyType({})
+    spawns: list[int] = []
+    child_messages: list[int] = []
+    child_turns: list[int] = []
+    parent_messages: list[int] = []
+    parent_turns: list[int] = []
+    parent_turn_id = _probe_mapping(
+        replies.get("parity-probe-turn"), "result", "turn"
+    ).get("id")
+    child_turn_id = next((
+        _probe_mapping(m, "params", "turn").get("id") for m in messages
+        if m.get("method") == "turn/completed"
+        and _probe_mapping(m, "params").get("threadId") == child
+    ), None)
+    if not all(
+        isinstance(value, str) and value
+        for value in (parent_turn_id, child_turn_id)
+    ):
+        return "typed_subagent_missing", MappingProxyType({})
+    for index, message in enumerate(messages):
+        params = _probe_mapping(message, "params")
+        item = _probe_mapping(params, "item")
+        thread_id = params.get("threadId")
+        if "error" in message or message.get("method") == "error":
+            return "response_error", MappingProxyType({})
+        if message.get("method") == "item/completed":
+            if (
+                item.get("type") == "collabAgentToolCall"
+                and item.get("tool") == "spawnAgent"
+            ):
+                return "v1_fallback", MappingProxyType({})
+            if (
+                item.get("type") in {"subAgentActivity", "agentMessage"}
+                and thread_id in (parent, child)
+                and params.get("turnId") != (
+                    parent_turn_id if thread_id == parent else child_turn_id
+                )
+            ):
+                return "typed_subagent_missing", MappingProxyType({})
+            if (
+                item.get("type") == "subAgentActivity"
+                and item.get("kind") == "started"
+            ):
+                if (
+                    thread_id != parent or item.get("agentThreadId") != child
+                    or item.get("agentPath") != "/root/parity_probe"
+                ):
+                    return "typed_subagent_missing", MappingProxyType({})
+                spawns.append(index)
+            if item.get("type") == "agentMessage":
+                if (
+                    thread_id == child
+                    and item.get("text") == _PARITY_PROBE_CHILD_MARKER
+                ):
+                    child_messages.append(index)
+                if (
+                    thread_id == parent
+                    and item.get("text") == _PARITY_PROBE_PARENT_MARKER
+                ):
+                    parent_messages.append(index)
+        if (
+            message.get("method") == "turn/completed"
+            and thread_id in (parent, child)
+        ):
+            turn = _probe_mapping(params, "turn")
+            if turn.get("status") != "completed" or turn.get("error") is not None:
+                return "response_error", MappingProxyType({})
+            if thread_id == parent:
+                if turn.get("id") != parent_turn_id:
+                    return "typed_subagent_missing", MappingProxyType({})
+                parent_turns.append(index)
+            else:
+                child_turns.append(index)
+    evidence = (spawns, child_messages, child_turns, parent_messages, parent_turns)
+    if any(len(items) != 1 for items in evidence) or not (
+        spawns[0] < child_messages[0] < child_turns[0]
+        < parent_messages[0] < parent_turns[0]
     ):
         return "typed_subagent_missing", MappingProxyType({})
     return (
@@ -8834,6 +9187,76 @@ def load_parity_receipt_artifact(
     )
 
 
+# Reviewed empty-home states for the local text/typed-agent core contract.
+_REVIEWED_FEATURE_PAIRS = MappingProxyType({
+    "analytics_plan_history": (
+        FeatureRecord(
+            name="analytics_plan_history", stage="experimental",
+            isolated_default=False, effective_state=False,
+        ),
+        None,
+    ),
+    "guardian_ext": (
+        FeatureRecord(
+            name="guardian_ext", stage="removed",
+            isolated_default=False, effective_state=False,
+        ),
+        FeatureRecord(
+            name="guardian_ext", stage="under development",
+            isolated_default=False, effective_state=False,
+        ),
+    ),
+    "personality": (
+        FeatureRecord(
+            name="personality", stage="removed",
+            isolated_default=False, effective_state=False,
+        ),
+        FeatureRecord(
+            name="personality", stage="stable",
+            isolated_default=True, effective_state=True,
+        ),
+    ),
+    "realtime_conversation": (
+        FeatureRecord(
+            name="realtime_conversation", stage="stable",
+            isolated_default=True, effective_state=True,
+        ),
+        FeatureRecord(
+            name="realtime_conversation", stage="experimental",
+            isolated_default=False, effective_state=False,
+        ),
+    ),
+    "send_message_to_user_async": (
+        FeatureRecord(
+            name="send_message_to_user_async", stage="under development",
+            isolated_default=False, effective_state=False,
+        ),
+        None,
+    ),
+    "use_xaa": (
+        FeatureRecord(
+            name="use_xaa", stage="under development",
+            isolated_default=False, effective_state=False,
+        ),
+        None,
+    ),
+    "worktrees": (
+        FeatureRecord(
+            name="worktrees", stage="stable",
+            isolated_default=True, effective_state=True,
+        ),
+        FeatureRecord(
+            name="worktrees", stage="experimental",
+            isolated_default=False, effective_state=False,
+        ),
+    ),
+})
+
+_OPTIONAL_BACKEND_REQUESTS = MappingProxyType({
+    ("client_request", "thread/rollback"): "7d8534143179f149e8d580a43813282ed06efc5df01f768a2d6263677b2be9fd",
+})
+
+
 def _current_parity_classification_table() -> Mapping[str, object]:
     table = _PARITY_CLASSIFICATION_TABLES.get(PARITY_POLICY_VERSION)
     if table is None:
@@ -9180,6 +9603,26 @@ def evaluate_parity_policy(
                 )
                 continue
         if entry.official is None:
+            expected_digest = _OPTIONAL_BACKEND_REQUESTS.get(key)
+            if (
+                entry.internal is not None
+                and entry.compatible
+                and entry.internal.schema_sha256 == expected_digest
+                and key not in observed_protocol
+                and not any(extension[:2] == key for extension in observed_extensions)
+            ):
+                code = "parity.protocol.optional_extension"
+                extension_identifier = f"{identifier}#backend_only_request"
+                findings.append(_policy_finding(
+                    category="protocol", code=code, severity="warning",
+                    identifier=extension_identifier,
+                    expected="optional-unobserved", observed="exact-backend-request",
+                ))
+                queue.append(ParityQueueItem(
+                    category="protocol", identifier=extension_identifier,
+                    finding_code=code,
+                ))
+                continue
             findings.append(
                 _policy_finding(
                     category="protocol",
@@ -9279,6 +9722,28 @@ def evaluate_parity_policy(
         if drift is None:
             continue
         name = entry.name
+        reviewed_pair = _REVIEWED_FEATURE_PAIRS.get(name)
+        if reviewed_pair is not None and (
+            entry.official, entry.internal
+        ) == reviewed_pair:
+            observed = name in observed_feature_names
+            code = (
+                "parity.feature.observed_core_missing" if observed and drift == "missing"
+                else "parity.feature.observed_core_drift" if observed
+                else "parity.feature.optional_missing" if drift == "missing"
+                else "parity.feature.optional_drift"
+            )
+            findings.append(_policy_finding(
+                category="feature", code=code,
+                severity="error" if observed else "warning",
+                identifier=name, expected="reviewed-core-independent-state",
+                observed="core-dependency" if observed else drift,
+            ))
+            if not observed:
+                queue.append(ParityQueueItem(
+                    category="feature", identifier=name, finding_code=code,
+                ))
+            continue
         if entry.official is None:
             findings.append(
                 _policy_finding(

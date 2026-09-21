@@ -292,6 +292,27 @@ fingerprint, and only then constructs the final receipt. Unknown or uncovered
 drift stops before probes; missing or failed required probe evidence cannot
 produce a healthy receipt.
 
+Policy v3 classifies only the reviewed current schema/state pairs as optional:
+image file-ID references on five requests, the additional backend
+`thread/rollback` request, and seven non-core feature differences
+(`analytics_plan_history`, `guardian_ext`, `personality`,
+`realtime_conversation`, `send_message_to_user_async`, `use_xaa`, `worktrees`).
+URL-based common request schemas must still be compatible. Changed evidence or
+an observed dependency blocks admission. This does not add file-ID image,
+realtime or worktree feature support; payloads are not rewritten or discarded.
+Previous policy receipts require staged regeneration.
+
+Core probes wait for asynchronous app-server replies before closing the
+session. The typed probe uses native app-server events and `thread/read` to
+verify one v2 explorer child, its parent/task path, exact completion markers
+and child-before-parent order. Both probes use isolated candidate artifacts;
+the explorer description is a process-local setting. Missing metadata, v1
+fallback, failed turns, stale inputs and timeouts remain unhealthy.
+
+The opt-in native regression uses a loopback provider and temporary homes:
+`CODEX_SWITCH_TEST_BACKEND=/absolute/path/to/codex PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scripts -p test_codex_native_parity.py -v`.
+It needs no provider credentials and does not switch the installed Desktop.
+
 Internal multi-agent v2 has no silent v1 fallback. Failed or unknown v2 evidence
 leaves the previous runtime generation effective and reports unhealthy. After
 reviewing the findings, an explicit

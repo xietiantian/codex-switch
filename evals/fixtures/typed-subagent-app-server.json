@@ -1,0 +1,122 @@
+[
+  {
+    "id": "parity-probe-initialize",
+    "result": {}
+  },
+  {
+    "id": "parity-probe-collaboration",
+    "result": {
+      "data": []
+    }
+  },
+  {
+    "id": "parity-probe-thread",
+    "result": {
+      "thread": {
+        "id": "parent"
+      }
+    }
+  },
+  {
+    "id": "parity-probe-turn",
+    "result": {
+      "turn": {
+        "id": "parent-turn"
+      }
+    }
+  },
+  {
+    "method": "item/completed",
+    "params": {
+      "threadId": "parent",
+      "item": {
+        "type": "subAgentActivity",
+        "id": "call_spawn",
+        "kind": "started",
+        "agentThreadId": "child",
+        "agentPath": "/root/parity_probe"
+      },
+      "turnId": "parent-turn"
+    }
+  },
+  {
+    "method": "item/completed",
+    "params": {
+      "threadId": "child",
+      "item": {
+        "type": "agentMessage",
+        "id": "msg_1",
+        "text": "parity-subagent-ok"
+      },
+      "turnId": "child-turn"
+    }
+  },
+  {
+    "method": "turn/completed",
+    "params": {
+      "threadId": "child",
+      "turn": {
+        "id": "child-turn",
+        "status": "completed",
+        "error": null
+      }
+    }
+  },
+  {
+    "method": "item/completed",
+    "params": {
+      "threadId": "parent",
+      "item": {
+        "type": "subAgentActivity",
+        "id": "subagent-completed-child-turn",
+        "kind": "completed",
+        "agentThreadId": "child",
+        "agentPath": "/root/parity_probe"
+      },
+      "turnId": "parent-turn"
+    }
+  },
+  {
+    "method": "item/completed",
+    "params": {
+      "threadId": "parent",
+      "item": {
+        "type": "agentMessage",
+        "id": "msg_1",
+        "text": "parity-parent-ok"
+      },
+      "turnId": "parent-turn"
+    }
+  },
+  {
+    "method": "turn/completed",
+    "params": {
+      "threadId": "parent",
+      "turn": {
+        "id": "parent-turn",
+        "status": "completed",
+        "error": null
+      }
+    }
+  },
+  {
+    "id": "parity-probe-child",
+    "result": {
+      "thread": {
+        "id": "child",
+        "parentThreadId": "parent",
+        "agentRole": "explorer",
+        "source": {
+          "subAgent": {
+            "thread_spawn": {
+              "parent_thread_id": "parent",
+              "depth": 1,
+              "agent_path": "/root/parity_probe",
+              "agent_role": "explorer"
+            }
+          }
+        }
+      }
+    }
+  }
+]

@@ -4,8 +4,8 @@ project_mode: brownfield
 current_stage: verification
 
 current_change:
-  id: support-namespaced-feature-keys
-  status: verified
+  id: classify-current-runtime-extensions
+  status: implementing
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: true
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,8 +41,8 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-21-namespaced-feature-keys
-  last_checkpoint_file: .planning/devflow/verification/support-namespaced-feature-keys.md
+  last_checkpoint_id: 2026-09-21-current-runtime-extensions
+  last_checkpoint_file: .planning/devflow/verification/classify-current-runtime-extensions.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
@@ -69,7 +69,7 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: support-namespaced-feature-keys
+  id: classify-current-runtime-extensions
   required: true
   status: satisfied
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
@@ -79,20 +79,20 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: support_namespaced_feature_keys
+  last_decision: classify_current_runtime_extensions
   last_goal_status: aligned
-  goal_summary: Accept namespaced feature identities while preserving compatibility policy.
+  goal_summary: Classify exact optional differences and verify native core behavior.
 ---
 
 # Workflow State
 
 ## Active Repair Status
 
-Namespaced feature grammar repair passes RED/GREEN, 102 parity and 227 profile
-tests, native old/new inventory collection, clean package checks and both
-independent reviews. Seven feature and six protocol differences remain
-separately tracked; no compatibility exception is granted. Implementation
-a899eed is pushed to PR #1 and its exact isolated package is verified.
+Exact optional classification and native core verification pass 112 parity/current
+cases, an opt-in real CLI regression, 227 profile cases, transaction guards and
+both independent review axes. Full current inventories have thirteen optional
+queue entries and no errors. Clean package/install verification and authorized
+PR delivery remain; no live Desktop or external provider validation is claimed.
 
 Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache

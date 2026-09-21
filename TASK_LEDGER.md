@@ -1,5 +1,20 @@
 # Task Ledger
 
+## Active Repair: Current Runtime Optional Extensions
+
+- Approved: precise optional classification plus isolated core-path verification,
+  with commit/push to existing PR #1; baseline 59cfe33.
+- Execution source: `openspec/changes/classify-current-runtime-extensions/tasks.md`.
+- Scope/evidence: that change’s design and `.planning/devflow/verification/classify-current-runtime-extensions.md`.
+- Status: exact classification and native probes implemented; 112 parity/current
+  cases, native regression, 227 profile cases and transaction guards pass.
+  Both review axes pass after bounded fixes. Clean package delivery is next.
+- No live install/Desktop mutation, external provider call or file-ID emulation.
+- Incidental finding TYPED-EVENTS-2026-09-21: CONTINUE_WITH_MINIMAL_GUARD.
+  Native exec JSON lacks the previously assumed typed role/source fields.
+  The approved core-proof contract requires app-server event and thread/read
+  evidence; scope, failure guards and isolation are recorded in the design.
+
 ## Active Repair: Namespaced Feature Keys
 
 - Approved: continue the runtime compatibility repair with isolated tests and
@@ -622,6 +637,11 @@ write task.
   production slice.
 
 ## Incidental Finding Register
+
+`CORE-STDIN-2026-09-21`: `CONTINUE_WITH_MINIMAL_GUARD`. Native current-runtime
+verification reproduced premature stdin closure in the existing core probe.
+Repair request/response sequencing under the existing timeout/output bounds
+within classify-current-runtime-extensions; preserve all core result checks.
 
 Namespaced-feature follow-up: `FEATURE-2026-09-21` is
 `DEFER_AND_CONTINUE` for this syntax repair. Empty-home feature-only comparison
