@@ -545,6 +545,54 @@ class ParityFeatureInventoryTests(unittest.TestCase):
             max_output_bytes=4096,
         )
 
+    def test_namespaced_features_retain_identity_and_effective_state(self) -> None:
+        isolated = (
+            "guardianv2                               under development  false\n"
+            "guardianv2.thread_context                under development  false\n"
+        )
+        effective = (
+            "guardianv2                               under development  false\n"
+            "guardianv2.thread_context                under development  true\n"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            official = self.collect(
+                root / "official",
+                RecordingFeatureRunner([
+                    feature_result(isolated), feature_result(isolated),
+                ]),
+                side="official",
+            )
+            internal = self.collect(
+                root / "internal",
+                RecordingFeatureRunner([
+                    feature_result(isolated), feature_result(effective),
+                ]),
+            )
+            comparison = compare_feature_inventories(official, internal)
+
+        self.assertEqual(
+            [entry.name for entry in comparison.entries],
+            ["guardianv2", "guardianv2.thread_context"],
+        )
+        self.assertEqual(
+            json.loads(internal.canonical_bytes)["features"],
+            [
+                {
+                    "name": "guardianv2", "stage": "under development",
+                    "isolated_default": False, "effective_state": False,
+                },
+                {
+                    "name": "guardianv2.thread_context",
+                    "stage": "under development",
+                    "isolated_default": False, "effective_state": True,
+                },
+            ],
+        )
+        entry = comparison.entry("guardianv2.thread_context")
+        self.assertFalse(entry.official.effective_state)
+        self.assertTrue(entry.internal.effective_state)
+
     def test_isolated_defaults_are_distinct_from_effective_state(self) -> None:
         isolated = (
             "multi_agent_v2  under development  false\n"
@@ -706,6 +754,21 @@ class ParityFeatureInventoryTests(unittest.TestCase):
                 "multi_agent_v2  under development  false\n",
                 "multi_agent_v2  stable  true\n",
             ),
+            (
+                "duplicate namespaced feature",
+                "guardianv2.thread_context  under development  false\n" * 2,
+                "guardianv2.thread_context  under development  false\n" * 2,
+            ),
+            (
+                "namespaced stage changed",
+                "guardianv2.thread_context  under development  false\n",
+                "guardianv2.thread_context  stable  false\n",
+            ),
+            (
+                "namespaced invalid bool",
+                "guardianv2.thread_context  under development  maybe\n",
+                "guardianv2.thread_context  under development  maybe\n",
+            ),
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -723,6 +786,32 @@ class ParityFeatureInventoryTests(unittest.TestCase):
                     self.assertEqual(
                         raised.exception.code,
                         "parity.feature.output_invalid",
+                    )
+
+    def test_namespaced_feature_segments_are_nonempty_and_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = "guardianv2.thread_context.v2  under development  false\n"
+            inventory = self.collect(root, RecordingFeatureRunner([
+                feature_result(output), feature_result(output),
+            ]))
+            self.assertEqual(
+                inventory.features[0].name, "guardianv2.thread_context.v2",
+            )
+            for name in (
+                ".guardianv2", "guardianv2.", "guardianv2..thread_context",
+                "guardianv2._context", "guardianv2.Thread_context",
+                "guardianv2/thread_context", "guardianv2.thread-context",
+                "guardianv2 thread_context", "guardianv2.线程",
+            ):
+                with self.subTest(name=name):
+                    output = f"{name}  under development  false\n"
+                    with self.assertRaises(ParityValidationError) as raised:
+                        self.collect(root, RecordingFeatureRunner([
+                            feature_result(output), feature_result(output),
+                        ]))
+                    self.assertEqual(
+                        raised.exception.code, "parity.feature.output_invalid",
                     )
 
     def test_runner_failure_timeout_and_truncation_fail_closed(self) -> None:
@@ -1577,6 +1666,47 @@ class ParityPolicyTests(unittest.TestCase):
     def test_custom_catalog_context_requires_an_explicit_boolean(self) -> None:
         with self.assertRaises(ParityValidationError):
             self.evaluate(custom_model_catalog="false")
+
+    def test_namespaced_feature_policy_keeps_unclassified_drift_blocking(self) -> None:
+        name = "guardianv2.thread_context"
+        feature = self.feature(
+            name, stage="under development",
+            isolated_default=False, effective_state=False,
+        )
+        trace = parity_module.ParityAcceptanceTrace(
+            schema_version=1, trace_id="namespaced-feature-test",
+            observed_protocol_methods=(), observed_features=(name,),
+            item_ids_observed_dependencies=(), observed_protocol_extensions=(),
+        )
+        self.assertEqual(trace.canonical_payload()["observed_features"], [name])
+        for same_state in (True, False):
+            with self.subTest(same_state=same_state):
+                comparison = self.feature_comparison(
+                    official=(feature,),
+                    internal=(replace(feature, effective_state=not same_state),),
+                )
+                result = parity_module.evaluate_parity_policy(
+                    feature_comparison=comparison,
+                    protocol_comparison=ProtocolInventoryComparison(entries=()),
+                    official_model_metadata={}, internal_model_metadata={},
+                    custom_model_catalog=True, acceptance_trace=trace,
+                )
+                self.assertEqual(result.healthy, same_state)
+                feature_findings = [
+                    finding for finding in result.findings
+                    if finding.category == "feature"
+                ]
+                if same_state:
+                    self.assertEqual(feature_findings, [])
+                else:
+                    self.assertEqual(len(feature_findings), 1)
+                    self.assertEqual(
+                        feature_findings[0].code,
+                        "parity.feature.unclassified_drift",
+                    )
+                    self.assertEqual(feature_findings[0].severity, "error")
+                    self.assertIn(name, feature_findings[0].message)
+                self.assertEqual(result.canonical_payload()["healthy"], same_state)
 
     def test_baseline_protocol_closures_are_core_and_unhealthy(self) -> None:
         entries = [

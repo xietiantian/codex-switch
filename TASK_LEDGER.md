@@ -1,5 +1,16 @@
 # Task Ledger
 
+## Active Repair: Namespaced Feature Keys
+
+- Approved: continue the runtime compatibility repair with isolated tests and
+  updates to existing PR #1; baseline 250c0ca.
+- Execution source: `openspec/changes/support-namespaced-feature-keys/tasks.md`.
+- Scope: shared feature-name grammar, public-seam regressions and evidence.
+- Evidence: `.planning/devflow/verification/support-namespaced-feature-keys.md`.
+- Status: RED/GREEN, 102 parity and 227 profile cases, native inventory,
+  installed-package checks and both reviews pass. Authorized delivery is next.
+- Feature classifications, live installation and provider requests are excluded.
+
 ## Active Repair: Custom Model Catalog Parity
 
 - Approved: skip official-model comparison for validated custom catalogs,
@@ -610,6 +621,19 @@ write task.
   production slice.
 
 ## Incidental Finding Register
+
+Namespaced-feature follow-up: `FEATURE-2026-09-21` is
+`DEFER_AND_CONTINUE` for this syntax repair. Empty-home feature-only comparison
+of official 0.155.0-alpha.9 and candidate 0.155.0 finds seven unclassified
+differences (analytics_plan_history, guardian_ext, personality,
+realtime_conversation, send_message_to_user_async, use_xaa, worktrees). Retain
+the existing blocking policy and make no successful full-update claim.
+An offline schema comparison with current coverage also reports incompatible
+thread/queue/add, thread/queue/update, thread/resume, turn/start and turn/steer,
+plus unclassified internal-only thread/rollback. Classification/adapter
+behavior repair needs separate capability evidence;
+this register does not authorize exceptions. See the namespaced verification
+record for the bounded local observation.
 
 | id | finding | disposition | reason / residual risk | follow-up |
 |---|---|---|---|---|

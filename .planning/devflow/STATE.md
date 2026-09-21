@@ -4,7 +4,7 @@ project_mode: brownfield
 current_stage: verification
 
 current_change:
-  id: respect-custom-model-catalog
+  id: support-namespaced-feature-keys
   status: verified
 
 standing_milestone:
@@ -41,13 +41,13 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-20-first-internal-install
-  last_checkpoint_file: .planning/devflow/verification/restore-first-internal-install.md
+  last_checkpoint_id: 2026-09-21-namespaced-feature-keys
+  last_checkpoint_file: .planning/devflow/verification/support-namespaced-feature-keys.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-09-20T17:07:51+08:00
+  compact_updated_at: 2026-09-21
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -69,7 +69,7 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: restore-first-internal-install
+  id: support-namespaced-feature-keys
   required: true
   status: satisfied
   reason: the active repair contract authorizes implementation, isolated verification, and a pull request
@@ -79,14 +79,19 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: respect_custom_model_catalog
+  last_decision: support_namespaced_feature_keys
   last_goal_status: aligned
-  goal_summary: Respect custom model catalogs while preserving runtime compatibility checks.
+  goal_summary: Accept namespaced feature identities while preserving compatibility policy.
 ---
 
 # Workflow State
 
 ## Active Repair Status
+
+Namespaced feature grammar repair passes RED/GREEN, 102 parity and 227 profile
+tests, native old/new inventory collection, clean package checks and both
+independent reviews. Seven feature and six protocol differences remain
+separately tracked; no compatibility exception is granted. Delivery is next.
 
 Custom-catalog parity correction is approved on the existing PR branch.
 The execution source is respect-custom-model-catalog/tasks.md. The absent-cache
@@ -118,6 +123,7 @@ every `v0.1.14` mutation excluded.
 
 ## Next Action
 
-Await upstream review of PR #1. The local test package is pinned to f116f6d,
-whose production bytes match the delivered branch.
+Complete namespaced feature verification and update PR #1 plus its local test
+package. The current local package remains pinned to 250c0ca until replacement
+passes isolated verification.
 Release publication and live installation remain separate.

@@ -50,7 +50,8 @@ ALLOWED_IDENTITY_DIFFERENCES = frozenset(
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _POLICY_VERSION_RE = re.compile(r"[1-9][0-9]*\Z")
 _CODE_RE = re.compile(r"[a-z0-9][a-z0-9_.-]*\Z")
-_FEATURE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_]*\Z")
+_FEATURE_NAME_PATTERN = r"[a-z0-9][a-z0-9_]*(?:\.[a-z0-9][a-z0-9_]*)*"
+_FEATURE_NAME_RE = re.compile(_FEATURE_NAME_PATTERN + r"\Z")
 _MODEL_SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _EXTENSION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 _PROBE_SENSITIVE_HEADER = re.compile(
@@ -74,7 +75,7 @@ _PROBE_URL_USERINFO = re.compile(
     r"(?i)(?P<scheme>https?://)[^/\s:@]+:[^@\s/]+@"
 )
 _FEATURE_LINE_RE = re.compile(
-    r"(?P<name>[a-z0-9][a-z0-9_]*)\s{2,}"
+    rf"(?P<name>{_FEATURE_NAME_PATTERN})\s{{2,}}"
     r"(?P<stage>under development|stable|experimental|deprecated|removed)"
     r"\s{2,}(?P<state>true|false)\Z"
 )

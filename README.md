@@ -89,8 +89,11 @@ official model name does not imply matching capabilities. This path does not
 read or require the official `models_cache.json`; its receipt records official
 model comparison as not applicable. Catalog integrity, original-source
 provenance behind managed overlays, Desktop protocol compatibility, required
-runtime features, and bounded behavior probes still apply. Existing receipts
-from the previous policy require fresh preparation. For a controlled switch
+runtime features, and bounded behavior probes still apply. Feature inventories
+support dot-separated names such as `guardianv2.thread_context`; these remain
+complete identifiers subject to the same compatibility policy as flat names.
+Malformed rows and unclassified feature differences still block promotion.
+Existing receipts from the previous policy require fresh preparation. For a controlled switch
 that keeps both currently installed versions, use
 `codex-switch split --keep-version`. This option does not skip Plugin repair,
 verify, Doctor, status, App-effect derivation, transaction validation, or the
