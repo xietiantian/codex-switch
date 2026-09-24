@@ -16,10 +16,13 @@
 - Standing authority: implement, isolated tests, commit/push existing PR branch.
   Excluded: live installation/config/Desktop/provider changes, release, archive,
   destructive cleanup, new dependency or unrelated workflow expansion.
-- Status: complete. Implementation `ef69b01` is delivered to the existing PR;
+- Status: section 8 correction in verification. Initial implementation `ef69b01` was delivered to the existing PR;
   1,246 source cases are covered, 113 installed tests pass, and exact package
   manifests remain valid without bytecode. Spec/Standards findings are closed.
-  No release, archive or live environment change is included.
+  Those historical cases omitted released explicit-binding migration. The
+  approved correction has fresh public/native migration proof; final broad and
+  package checks precede renewed delivery. No release, archive or live
+  environment change is included.
 - Previous `respect-custom-model-catalog` and other completed repairs remain
   archived. Preserve existing local verification roots and untracked research.
 
@@ -29,6 +32,7 @@
 |---|---|---|---|
 | STAGED-WORKFLOW-GUIDANCE-2026-09-23 | DEFER_AND_CONTINUE | Baseline workflow validator warns AGENTS lacks the Project-Directed Implementation Readiness heading. This change selects no external provider and records `implementation_readiness.required: false`; behavior and apply checks remain valid. | Unrelated workflow refresh is not authorized by this change. |
 | STAGED-OPEN-SPEC-CLI-2026-09-23 | CONTINUE_WITH_MINIMAL_GUARD | Global CLI is 1.3.1; native generated skills target 1.7.0. Reuse the existing retained isolated 1.7.0 executable for instructions/validation without modifying cache or global tooling. | Read-only tooling selection is within scope; no install or dependency change. |
+| STAGED-PRE-SNAPSHOT-ID-2026-09-24 | DEFER_AND_CONTINUE | A different invalid context can fail after allocating an update directory but before persisting its first record, so the error's ID may not be queryable. No installer, configuration capture or publication has started; the current binding correction no longer enters this failure for supported released state. | Separate early-failure record/recovery contract correction; this binding-semantics repair does not authorize rewriting persistence behavior. |
 | STAGED-ARTIFACT-RETENTION-2026-09-24 | DEFER_AND_CONTINUE | The contract was sealed before creation with retention=retain. The macOS cleanup inspector rejects archive-preserved birth times and installed-layout symlinks; it does not certify automatic reclamation. Exact package/installed manifest and test proofs remain valid. Preserve every artifact, contract, observation and diagnostic plan; no cleanup is attempted. Workflow JSON has no issues and reports this as a visible warning. | A dedicated cleanup/inspector change may later reconcile these identities. No cleanup decision or workflow-code change is needed to deliver the verified runtime update. |
 
 

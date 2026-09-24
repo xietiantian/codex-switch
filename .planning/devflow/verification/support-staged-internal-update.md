@@ -8,8 +8,9 @@
 - Requester authority: complete generic stage/apply implementation, isolated
   tests and update of the existing PR. No live workstation mutation, release,
   destructive cleanup, dependency addition or workflow expansion.
-- Current status: implemented, reviewed, verified and delivered to the existing
-  PR. All active tasks are complete; release/archive/live acceptance are excluded.
+- Current status: the initial delivery is under an approved section 8 compatibility
+  correction. Historical passing tests did not cover released explicit bindings;
+  fresh migration and exact-package evidence are required before renewed delivery.
 - Execution source: the new change's `tasks.md`. Completion checkboxes remain
   conservative until the integrated native, recovery and package evidence is complete.
 - Previous archived changes, local verification roots and untracked
@@ -287,3 +288,67 @@ fast-forward to the exact implementation. The existing fork branch was pushed,
 and GitHub readback confirms PR #1 remains open with head `ef69b01`. Its title
 and description reflect the complete implementation and current evidence.
 The final control-plane-only checkpoint does not alter packaged inputs.
+
+
+## Released binding correction — 2026-09-24
+
+Authority: the requester approved revising the plan first, then implementing the
+binding correction and delivering to the existing branch/PR. Native section 8
+is the execution source. No live state, release or archive is authorized.
+
+Root cause and release provenance:
+- v0.1.15, commit `04374d37a0764286567a66fa87da5a9849d286e6`, permits explicit
+  `init --codex-bin` / `--app-cli-path` and saves `explicit-compatibility`.
+- `ef69b01` introduced the initial official-path/actual-Desktop equality gate.
+  The saved state is producible by a release; the hard stage failure is new.
+- The detailed native design incorrectly turned a frozen-state concurrency
+  requirement into cross-role initial equality. Corrected design/spec preserve
+  saved intent separately from actual verified reference identity. No path
+  exception, manifest rewrite, weaker parity policy or schema change is used.
+- The direct public regression uses real init/capture, not an invented manifest.
+  Exact ef69b01 plus v0.1.15 init goes RED on both stage forms with the original
+  error. The corrected source accepts both forms; three separate post-stage
+  manifest/bundle/CLI changes still reject publication and preserve user bytes.
+
+Current proof (local logs: `local/binding-migration-20260924/`):
+- `public-baseline-red.log`: exact previous implementation rejects both forms.
+- `public-release-green.log`: 5 tests pass, 13.732s, actual released init source.
+- `native-migration.log`: released init -> current stage -> native apply ->
+  switch -> verify passes, 19.864s. Original runtime/desktop bytes stay unchanged.
+- `native-all.log`: all 10 native cases pass, 146.212s, real runtime 0.155.0 and
+  Desktop runtime 0.155.0-alpha.9.2 copied into isolated fixtures, loopback only.
+- First fixture attempts exposed missing explicit auth allowance, the temporary
+  home Library parent and expected home-binding metadata written at apply. Tests
+  were corrected to model supported inputs and assert saved command intent;
+  no production behavior was changed to accommodate fixture errors.
+
+Reproduction commands (from repository root; runtime inputs are read-only):
+```sh
+# Extract the immutable release into the retained local verification root.
+git archive --format=tar --output=RELEASE_ARCHIVE v0.1.15
+# RELEASE_ROOT is that extracted source, not a caller-authored profile.
+PYTHONDONTWRITEBYTECODE=1 CODEX_SWITCH_TEST_RELEASE_ROOT="$RELEASE_ROOT" \
+  python3 -B scripts/test_codex_staged_update.py ReleasedBindingUpdateTests -v
+PYTHONDONTWRITEBYTECODE=1 CODEX_SWITCH_TEST_RELEASE_ROOT="$RELEASE_ROOT" \
+  CODEX_SWITCH_TEST_BACKEND="$BACKEND" CODEX_SWITCH_TEST_OFFICIAL_BACKEND="$DESKTOP_CLI" \
+  python3 -B scripts/test_codex_native_staged_update.py -v
+```
+The exact local source path, release archive digest and executed commands are
+retained with the local run; exported public evidence contains no operator
+configuration. The default test fallback uses current init and is not counted
+as historical-release proof.
+
+Independent native reviews (read-only, no shared writes):
+- Spec: no blocking findings. Confirmed supported release state, independently
+  frozen inputs, precommit revalidation and retained full Desktop requirements.
+  Requested explicit release-root provenance and fresh integrated/package proof.
+- Standards: no blocking violations or actionable Fowler smells. Confirmed
+  transaction safety and behavioral migration tests. Same final-evidence limits.
+- Validated contracts are `local/binding-migration-20260924/{spec,standards}-review-contract.md`;
+  each reviewer inspected the delta from `2c9691c88a90ccfbea06f845197e00911762a80e`.
+
+A registration attempt for the protected verification metadata root was refused
+by the generated-artifact tool before any contract was issued. The response is
+retained as `artifact-registration-rejected.json`, outside the contract registry;
+it authorizes no cleanup. Verification evidence is retained. Exact package
+output uses the existing pre-creation sealed-contract runner under `dist/`.

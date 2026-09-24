@@ -26,6 +26,9 @@ evidence when a process exits.
   default cache/bundled comparison and the existing bounded overlay rule.
 - Cover public commands, persistence, rollback, native parity and packaged
   upgrades with isolated test-first validation and neutral documentation.
+- Preserve released explicit-compatibility profile bindings independently of
+  actual Desktop reference selection; reject changes to either frozen state,
+  not supported initial differences between their paths.
 
 ## Capabilities
 

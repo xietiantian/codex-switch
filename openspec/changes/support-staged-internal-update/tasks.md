@@ -13,7 +13,7 @@
 
 ## 3. Transactional full apply and first publication
 
-- [x] 3.1 Bind the first apply input fingerprint and prepare current parity/capability/runtime projections against the retained candidate and frozen actual Desktop reference; reject saved binding/reference mismatch, unavailable full-mode reference and changed official/internal/store/home/target/profile/selection/source identities before publication.
+- [x] 3.1 Bind the first apply input fingerprint and prepare current parity/capability/runtime projections against the retained candidate and frozen actual Desktop reference; reject unavailable full-mode reference and changes to each frozen official/internal/store/home/target/profile/selection/source identity before publication. Initial explicit compatibility differences are corrected and revalidated in section 8.
 - [x] 3.2 Extend the existing runtime-binding transaction, artifact roles and journal only as needed to publish candidate profile config/auth/provenance with runtime, wrapper, binding and parity artifacts; add RED/GREEN rollback and installed-path failure cases and preserve the returned staged runtime path after executable swap.
 - [x] 3.3 Add RED/GREEN first full apply with no CLI/profile and an existing verified Desktop, including journaled prior absence, no-replace publication, concurrent target/profile/backup appearance, failed postcondition rollback, partial-state refusal and no-Desktop full-mode failure; preserve strict one-shot CLI-only bootstrap.
 - [x] 3.4 Add public-sequence RED/GREEN for successful strict CLI-only bootstrap -> actual Desktop available -> `stage --current` with CLI present/profile absent -> full apply; prove first profile/config/auth/binding publication succeeds without a second installer or empty-target check, failed/cancelled adoption preserves the CLI, and partial/tampered/unowned/residual state or drift is rejected.
@@ -41,3 +41,9 @@
 
 - [x] 7.1 Commit the reviewed complete change to the existing branch, verify an exact-commit package and manifest before/after isolated installed tests, then push to the existing PR under standing authorization; preserve all unrelated untracked/historical artifacts and exclude live installation, release and archive.
 - [x] 7.2 Read back the delivered revision/PR state, record final validation/review/package evidence and any non-blocking findings, and mark completion only when every required behavior is proven and no approved work remains.
+
+## 8. Preserve released explicit compatibility bindings
+
+- [x] 8.1 Correct the native design/spec and add public init-to-stage RED coverage for released explicit-compatibility state; preserve the actual Desktop resolver and compare saved bindings and resolved reference only to their own snapshots. Run GREEN without rewriting saved official intent.
+- [x] 8.2 Exercise released init output through real native stage/apply/switch/verify with isolated runtime copies and a loopback provider. Cover canonical bindings and independent post-stage manifest, bundle and CLI drift; retain no-Desktop/full-mode and first-install regression gates.
+- [ ] 8.3 Run focused and broad regression, native Spec/Standards review, strict OpenSpec/workflow checks and exact-package installed migration tests. Update evidence and deliver to the existing PR; preserve historical artifacts and the live workstation.

@@ -84,6 +84,15 @@ original catalog evidence, selected store and homes, actual verified Desktop
 reference, prior profile, active selection, bindings and target identity or
 absence. It SHALL reject drift before publication and use the existing
 recoverable transaction for all published runtime/profile/parity artifacts.
+Saved profile bindings and the resolved actual Desktop reference SHALL be
+frozen independently and compared with their respective prior snapshots.
+Supported initial explicit-compatibility path differences SHALL NOT be treated
+as concurrent drift or require caller-side profile repair.
+
+#### Scenario: Released init produced an explicit compatibility binding
+- **WHEN** a saved official profile created by released init has explicit CLI paths different from the verified actual Desktop bundled CLI
+- **THEN** stage preserves that manifest and accepts the supported initial difference
+- **AND** full apply uses the actual verified Desktop reference, preserves the official binding intent, and supports subsequent switch and verification under existing rules.
 
 #### Scenario: Frozen inputs or destination identities change
 - **WHEN** the runtime, config, auth, original catalog, store/home, target, profile or binding changes after capture or staging
@@ -91,7 +100,7 @@ recoverable transaction for all published runtime/profile/parity artifacts.
 - **AND** changed, missing and newly appearing sources are distinguished.
 
 #### Scenario: Actual Desktop reference differs
-- **WHEN** the actual Desktop bundle, bundled CLI or saved reference binding differs from the frozen reference
+- **WHEN** the actual Desktop bundle or bundled CLI changes from the frozen Desktop reference, or a saved profile binding changes from its own frozen state
 - **THEN** apply refuses stale or inconsistent evidence
 - **AND** a saved App binding cannot bypass actual bundle identity, schemas, features or required native probes.
 

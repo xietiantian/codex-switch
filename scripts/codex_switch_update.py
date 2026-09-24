@@ -267,14 +267,9 @@ def context_snapshot(store, target):
     homes = {name: str(absolute_path(home.path)) for name, home in
              (("internal", plan.internal), ("official", plan.official))}
     reference = desktop_reference()
-    official = store.manifest_path("openai-official")
-    if official.exists():
-        saved = store.load_manifest("openai-official")
-        for name in ("codex_bin", "app_cli_path"):
-            value = saved.get(name)
-            if value and (not reference["present"] or
-                          absolute_path(value) != absolute_path(reference["bundled_cli_path"])):
-                raise UpdateError("Saved official binding disagrees with the installed Desktop reference")
+    # Released init supports explicit profile paths distinct from the actual
+    # Desktop reference. Freeze both independently; require_frozen compares
+    # each with its own prior state without rewriting the saved binding intent.
     return {"store": directory_state(store.root), "target": file_state(target),
             "target_parent": directory_state(target.parent),
             "profiles": {name: tree_state(store.profile_dir(name)) for name in ("internal", "openai-official")},

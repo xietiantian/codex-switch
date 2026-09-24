@@ -44,6 +44,7 @@ from test_codex_native_parity import FIXTURES, start_loopback_server
 
 BACKEND = os.environ.get("CODEX_SWITCH_TEST_BACKEND")
 OFFICIAL_BACKEND = os.environ.get("CODEX_SWITCH_TEST_OFFICIAL_BACKEND")
+RELEASE_ROOT = os.environ.get("CODEX_SWITCH_TEST_RELEASE_ROOT")
 
 
 @unittest.skipUnless(BACKEND, "set CODEX_SWITCH_TEST_BACKEND for real staged-update proof")
@@ -211,6 +212,62 @@ class NativeStagedUpdateTests(unittest.TestCase):
     def stage(self):
         return self.command("stage", "--version", self.version,
                             "--internal-bin", str(self.target), "--json")
+
+    def profile_command(self, *tokens, released=False):
+        source = Path(RELEASE_ROOT) if released and RELEASE_ROOT else Path(__file__).resolve().parents[1]
+        program = '''
+import pathlib, runpy, sys
+scripts, applications = map(pathlib.Path, sys.argv[1:3])
+sys.path.insert(0, str(scripts))
+import codex_switch_runtime_binding as binding
+binding.discover_desktop_hosts.__defaults__ = (binding.DesktopRoots(
+    chatgpt=applications / 'ChatGPT.app', legacy_codex=applications / 'Codex.app',
+    chatgpt_classic=applications / 'ChatGPT Classic.app'),)
+sys.argv = [str(scripts / 'codex_profile_switch.py'), *sys.argv[3:]]
+runpy.run_path(sys.argv[0], run_name='__main__')
+'''
+        return subprocess.run([sys.executable, "-B", "-c", program, str(source / "scripts"),
+            str(self.desktop_roots.chatgpt.parent), *self.global_args[:-2],
+            "--live-codex-home", str(self.internal_home), *tokens],
+            env=dict(os.environ), cwd=self.root, capture_output=True, text=True, timeout=120)
+
+    def test_released_init_binding_survives_native_apply_switch_and_verify(self):
+        from codex_switch_verify import collect_parity_report
+        self.target.parent.mkdir()
+        shutil.copy2(self.candidate, self.target)
+        self.internal_home.mkdir()
+        (self.internal_home / "config.toml").write_text(self.config)
+        initialized = self.profile_command("init", "--codex-bin", str(self.target),
+            "--app-cli-path", str(self.target), "--capture-current", "internal", released=True)
+        self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+        store = make_store(self.args("stage", "--current"))
+        official = store.manifest_path("openai-official")
+        before = official.read_bytes()
+        saved = json.loads(before)
+        self.assertEqual(saved["runtime_binding"], "explicit-compatibility")
+        self.assertEqual(saved["app_cli_path"], str(self.target))
+        staged, _ = self.command("stage", "--current", "--json")
+        self.assertEqual(staged["desktop_reference"]["bundled_cli_path"], str(self.inventory.current.bundled_cli))
+        self.assertEqual(official.read_bytes(), before)
+        applied, _ = self.command("apply", staged["update_id"],
+            "--from-codex-home", str(self.final_home), "--json")
+        self.assertEqual(applied["state"], "applied")
+        self.assertTrue(collect_parity_report(store, None).healthy)
+        after_apply = json.loads(official.read_bytes())
+        for key in ("codex_bin", "app_cli_path", "runtime_binding"):
+            self.assertEqual(after_apply[key], saved[key])
+        (self.home / "Library/LaunchAgents").mkdir(parents=True)
+        switched = self.profile_command("switch", "internal", "--skip-launchctl")
+        self.assertEqual(switched.returncode, 0, switched.stdout + switched.stderr)
+        verified = self.profile_command("verify", "internal")
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+        # Switching may persist existing home-selection metadata; it must not
+        # convert the saved official command intent into a canonical binding.
+        after = json.loads(official.read_bytes())
+        for key in ("codex_bin", "app_cli_path", "runtime_binding"):
+            self.assertEqual(after[key], saved[key])
+        self.assertGreaterEqual(len(self.requests), 4)
+        self.assertFalse(self.marker.exists())
 
     def test_real_first_full_apply_retains_candidate_and_replays_without_probes(self):
         staged, store = self.stage()

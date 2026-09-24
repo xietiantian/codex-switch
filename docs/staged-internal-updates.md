@@ -37,6 +37,14 @@ binaries, saved bindings, online release versions and arbitrary reference paths
 cannot substitute for the installed bundle. If Desktop is absent, install it
 separately before staging work intended for full apply.
 
+Existing explicit compatibility bindings remain supported. In particular,
+released `init --codex-bin` or `--app-cli-path` may have saved official profile
+paths that differ from the actual Desktop bundled CLI. Stage preserves that
+intent and records it separately from the verified Desktop reference; callers
+do not need to delete or rewrite their official profile. Apply compares each
+with its own staged state and refuses subsequent changes to either. Initial
+path differences do not waive any Desktop compatibility checks.
+
 The capture boundary covers config/auth and validated model-catalog evidence.
 The caller continues to own auxiliary files and configuration generation.
 There is no recipe, file-deployment manifest, hook callback or Desktop-installer

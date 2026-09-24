@@ -4,7 +4,9 @@
 import json
 from contextlib import contextmanager
 import os
+import plistlib
 import subprocess
+import sys
 import signal
 import time
 import tempfile
@@ -197,6 +199,122 @@ exit "$rc"
 ''')
                 result = subprocess.run(["bash", str(script), trigger], capture_output=True, text=True, timeout=5)
                 self.assertEqual(result.returncode, 143, result.stdout + result.stderr)
+
+
+class ReleasedBindingUpdateTests(unittest.TestCase):
+    """Real init output is an input contract, not a hand-authored manifest.
+
+    CODEX_SWITCH_TEST_RELEASE_ROOT optionally selects a released checkout for
+    init/capture. Only Desktop discovery roots and installer transport are
+    fixtures; commands, manifests and drift checks run their original code.
+    """
+
+    write = bootstrap_tests.FirstInstallTests.write
+    write_installer = bootstrap_tests.FirstInstallTests.write_installer
+    command = StagedUpdateTests.command
+
+    def setUp(self):
+        bootstrap_tests.FirstInstallTests.setUp(self)
+        self.root = self.root.resolve()
+        self.bundle = self.root / "Applications/ChatGPT.app"
+        self.bundled = self.bundle / "Contents/Resources/codex"
+        self.write(self.bundled, '#!/bin/sh\necho "codex-cli 2.0.0"\n')
+        self.write(self.bundle / "Contents/MacOS/ChatGPT", '#!/bin/sh\nexit 99\n')
+        self.plist = self.bundle / "Contents/Info.plist"
+        self.plist.write_bytes(plistlib.dumps({
+            "CFBundleIdentifier": "com.openai.codex", "CFBundleExecutable": "ChatGPT",
+            "CFBundleShortVersionString": "1.0",
+        }))
+        interpreter = self.root / "fixture-python"
+        self.write(interpreter, f'''#!{sys.executable}
+import pathlib, runpy, sys
+sys.dont_write_bytecode = True
+args = sys.argv[1:]
+while args and args[0] in ('-I', '-B', '-u'):
+    args.pop(0)
+scripts = pathlib.Path(args[0]).parent if args[0] not in ('-c', '-') else pathlib.Path({str(WRAPPER.resolve().parent)!r})
+sys.path.insert(0, str(scripts))
+import codex_switch_runtime_binding as binding
+root = pathlib.Path({str(self.bundle.parent)!r})
+binding.discover_desktop_hosts.__defaults__ = (binding.DesktopRoots(
+    chatgpt=root / 'ChatGPT.app', legacy_codex=root / 'Codex.app',
+    chatgpt_classic=root / 'ChatGPT Classic.app'),)
+sys.argv = args
+if args[0] == '-c':
+    sys.argv = ['-c', *args[2:]]
+    exec(compile(args[1], '<fixture>', 'exec'), {{'__name__': '__main__'}})
+elif args[0] == '-':
+    exec(compile(sys.stdin.read(), '<fixture>', 'exec'), {{'__name__': '__main__'}})
+else:
+    runpy.run_path(args[0], run_name='__main__')
+''')
+        self.env["CODEX_SWITCH_PYTHON"] = str(interpreter)
+
+    def initialize(self, *, canonical=False):
+        self.write(self.target, '#!/bin/sh\necho "codex-cli 2.0.0"\n')
+        self.write(self.home / ".codex/config.toml", 'model="fixture"\n')
+        source = Path(os.environ.get("CODEX_SWITCH_TEST_RELEASE_ROOT", WRAPPER.resolve().parent.parent))
+        base = [self.env["CODEX_SWITCH_PYTHON"], str(source / "scripts/codex_profile_switch.py"),
+                "--store-dir", str(self.store), "--live-codex-home", str(self.home / ".codex"),
+                "--internal-codex-home", str(self.home / ".codex")]
+        commands = [["init"], ["capture", "internal", "--codex-bin", str(self.target),
+                               "--allow-missing-auth"]] if canonical else [
+            ["init", "--codex-bin", str(self.target), "--app-cli-path", str(self.target),
+             "--capture-current", "internal"]]
+        for args in commands:
+            result = subprocess.run(base + args, env=self.env, text=True, capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.official = self.store / "profiles/openai-official/manifest.json"
+        saved = json.loads(self.official.read_text())
+        self.assertEqual(saved["runtime_binding"], "canonical" if canonical else "explicit-compatibility")
+        self.assertEqual(saved["codex_bin"], str(self.bundled if canonical else self.target))
+
+    def test_released_explicit_binding_accepts_stage_and_current(self):
+        self.initialize()
+        before = self.official.read_bytes()
+        target_before = self.target.read_bytes()
+        for args in (("stage", "--current", "--json"),
+                     ("stage", "--version", "2.0.0", "--skip-proxy", "--skip-source-check", "--json")):
+            with self.subTest(args=args):
+                result = self.command(*args)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                staged = json.loads(result.stdout)
+                self.assertEqual(staged["state"], "staged")
+                self.assertEqual(staged["desktop_reference"]["bundled_cli_path"], str(self.bundled))
+                self.assertEqual(self.official.read_bytes(), before)
+                self.assertEqual(self.target.read_bytes(), target_before)
+
+    def test_canonical_binding_still_stages(self):
+        self.initialize(canonical=True)
+        result = self.command("stage", "--current", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def assert_released_binding_drift_refused(self, changed):
+        self.initialize()
+        result = self.command("stage", "--current", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        staged = json.loads(result.stdout)
+        target_before = self.target.read_bytes()
+        config = self.home / ".codex/config.toml"
+        config_before = config.read_bytes()
+        path = {"manifest": self.official, "bundle": self.plist, "cli": self.bundled}[changed]
+        path.write_bytes(path.read_bytes() + b"\n")
+        edited = path.read_bytes()
+        applied = self.command("apply", staged["update_id"], "--json")
+        self.assertNotEqual(applied.returncode, 0)
+        self.assertEqual(json.loads(applied.stdout)["state"], "stale")
+        self.assertEqual(path.read_bytes(), edited)
+        self.assertEqual(self.target.read_bytes(), target_before)
+        self.assertEqual(config.read_bytes(), config_before)
+
+    def test_released_official_manifest_drift_is_stale(self):
+        self.assert_released_binding_drift_refused("manifest")
+
+    def test_released_desktop_bundle_drift_is_stale(self):
+        self.assert_released_binding_drift_refused("bundle")
+
+    def test_released_desktop_cli_drift_is_stale(self):
+        self.assert_released_binding_drift_refused("cli")
 
 
 class CatalogInputFingerprintTests(unittest.TestCase):

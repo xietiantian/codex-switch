@@ -18,7 +18,7 @@ Current source evidence, inspected on 2026-09-23:
 | `scripts/codex_switch_transaction.py` | Directory locks, executable swaps, text-artifact role/path guards and recoverable journals already exist | Extend these exact publication/recovery contracts, including explicit absent old state; do not create a competing rollback engine |
 | `scripts/codex_switch_first_install.py`, `check_empty`, `publish` | Rejects existing target/profile/backup/pending transaction; uses no-replace first publication | Preserve strict bootstrap and reuse its absence/ownership guards for first full apply |
 | `scripts/codex_switch_runtime_binding.py` | `DesktopRoots` and `discover_desktop_hosts` verify actual canonical Desktop; official manifests cannot choose a different App bundle | Freeze and revalidate actual inventory and saved bindings rather than accepting a caller-supplied substitute |
-| `scripts/codex_profile_switch.py` | Existing public home/store arguments; init/capture `--app-cli-path` refers to CLI binding, not an App-root override | Reuse those location contracts, expose actual reference identity, and reject mismatches |
+| `scripts/codex_profile_switch.py` | Existing public home/store arguments; init/capture `--app-cli-path` refers to CLI binding, not an App-root override | Preserve explicit compatibility bindings; independently freeze the actual Desktop reference and reject changes to either snapshot |
 | `scripts/codex_switch_release_bundle.py` | Required runtime module/path inventories and import checks govern package completeness | Register any new runtime module and test it after an isolated prior-to-candidate package upgrade |
 
 The global OpenSpec command is 1.3.1. The repository retains an independently
@@ -213,9 +213,27 @@ At stage and again at apply, resolve the same canonical Desktop inventory and
 saved official/internal binding context. Existing `init --codex-bin` and
 `--app-cli-path` do not authorize a different Desktop root: current resolver
 selects the actual verified bundle. Persist its root, bundle ID, executable
-identity and bundled CLI digest/version, plus saved binding state, then require
-equality before preparing and publishing. Refuse a saved binding that disagrees
-with this selected actual reference instead of silently accepting only a warning.
+identity and bundled CLI digest/version separately from saved binding state.
+Before preparing and publishing, compare each object with its own stage
+snapshot. Do not require saved profile paths to equal the resolved Desktop CLI
+at the start of an update. Existing resolver warnings remain warnings; actual
+reference identity and full compatibility requirements remain mandatory.
+
+The released v0.1.15 `init --codex-bin` / `--app-cli-path` can create an
+`explicit-compatibility` official manifest whose paths differ from the actual
+Desktop CLI. The initial equality gate added in ef69b01 is a regression against
+that supported state, not a prerequisite callers must repair. Preserve the
+saved profile's mode and intent; staging must not rewrite it. Canonical Desktop
+reference discovery never accepts an arbitrary saved CLI as a replacement.
+Whether Desktop is required remains a full-apply versus CLI-only decision.
+
+The approved repair uses production init output as migration input, then runs
+stage/apply and switch/verify with unchanged official bindings. Separate tests
+change the official manifest, Desktop bundle and bundled CLI after staging:
+each must reject publication as stale without replacing concurrent changes.
+A path-specific exception or caller-side manifest rewrite would conceal the
+contract error and is rejected. No public interface or persistence schema
+change is needed.
 Return the selected reference so a caller can compare its own discovery.
 
 There is no new Desktop-path override, App download or arbitrary official

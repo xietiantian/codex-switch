@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: complete
+current_stage: implementation
 
 current_change:
   id: support-staged-internal-update
-  status: complete
+  status: in_progress
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: true
-  verification_passed: true
+  implementation_done: false
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -71,8 +71,8 @@ context_management:
 goal_gate:
   id: support-staged-internal-update
   required: true
-  status: complete
-  reason: the native Goal Contract is satisfied by complete source and installed proof plus existing PR delivery
+  status: active
+  reason: approved correction must restore released explicit binding compatibility and prove migration before renewed delivery
   suggested_goal: none
 
 context_health:
@@ -106,7 +106,13 @@ Goal Contract is in the design. No external implementation provider is selected.
 
 ## Current Next Action
 
-No approved implementation or delivery work remains. Retain the exact package
+Approved section 8 corrects the initial binding equality regression. Update the
+existing design/spec, run public migration RED/GREEN and isolated native proof,
+then deliver to the existing PR. Earlier passing counts did not cover released
+explicit-compatibility init state and do not establish this repair's acceptance.
+Retain the exact previous package.
+
+Historical delivery: retain the exact package
 and its evidence. The cleanup planner refuses automatic reclamation for
 timestamp-preserving archives and installed symlinks; no cleanup is authorized
 or performed. Skill package layout/complexity remains a documented follow-up.
