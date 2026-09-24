@@ -8,8 +8,8 @@
 - Requester authority: complete generic stage/apply implementation, isolated
   tests and update of the existing PR. No live workstation mutation, release,
   destructive cleanup, dependency addition or workflow expansion.
-- Current work: implementation/review complete; frozen regression and exact-
-  commit package/installed verification in progress before existing-PR delivery.
+- Current status: implemented, reviewed, verified and delivered to the existing
+  PR. All active tasks are complete; release/archive/live acceptance are excluded.
 - Execution source: the new change's `tasks.md`. Completion checkboxes remain
   conservative until the integrated native, recovery and package evidence is complete.
 - Previous archived changes, local verification roots and untracked
@@ -243,3 +243,47 @@ items; workflow JSON reports `ok: true`, `issues: []`. Remaining work is exact-
 commit package/import/installed verification, release-target skill evaluation
 and the authorized existing-PR delivery. Current source verification does not
 claim those later effects are complete.
+
+## Exact package and delivery proof
+
+Implementation commit: `ef69b01dd21e64d806e35268c4ec48e9f5de0cfc`.
+Previous PR commit: `956197209b2dfa86ba0a8a948a7e571c4f3ab9ef`.
+Both source trees were extracted from exact `git archive` commits. Each used
+its own `scripts/package-release.sh`; the previous installer ran first, then
+the candidate installer upgraded the same newly created private HOME/lib/bin.
+The actual workstation installation was not an install target.
+
+The candidate's public version/stage/apply entrypoints and import closure pass.
+Installed suites: staged 17, private preparation 14, catalog routing 26, strict
+bootstrap 31 and signal cleanup 11. Installed real native staged/parity/lifecycle
+modules pass all 14 cases in 174.596 seconds. Total: 113 installed tests passed,
+zero failures, errors or skips. These tests use the installed modules, private
+homes and loopback model responses; they do not claim live Desktop UI acceptance.
+
+Distribution, archive and installed manifests validate before and after tests:
+
+- Payload SHA-256: `4011b71ff6f59d6dc5a947c3bd57546291fd74a622a788e5fbe18ac811e102d5`.
+- Archive SHA-256: `9f4e37e334b0617c847ff2abe412bd601c665324a979a0187b614e046f1d12ec`.
+- Source, distribution and installed Python bytecode files: zero.
+
+Release-target `plugin-eval analyze` reports 63/100, grade D; the exact previous
+package reports 68/100, grade D. Both flag excessive deferred input because the
+existing skill package includes all runtime/tests. Structural and complexity
+warnings are retained in INC-029. The new main skill guidance was shortened;
+a broader packaging/function refactor is not part of this completed update.
+
+Generated artifacts were registered and canonically sealed before creation
+with `retention=retain`. The diagnostic cleanup planner returns HUMAN_GATE
+for archive-preserved macOS birth times and the installed command/current/
+rollback symlinks. This is not a cleanable receipt and is not treated as one.
+All output, sealed contracts, observations and diagnostic plans are preserved.
+An initial observation/plan directory layout was corrected without discarding
+its history. Workflow JSON is `ok: true`, `issues: []`, with visible cleanup and
+pre-existing readiness-heading warnings. No missing implementation authority
+or material cleanup decision is being hidden; no cleanup is attempted.
+
+Native Git preflight confirms the expected previous remote commit and safe
+fast-forward to the exact implementation. The existing fork branch was pushed,
+and GitHub readback confirms PR #1 remains open with head `ef69b01`. Its title
+and description reflect the complete implementation and current evidence.
+The final control-plane-only checkpoint does not alter packaged inputs.

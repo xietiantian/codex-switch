@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: complete
 
 current_change:
   id: support-staged-internal-update
-  status: in_progress
+  status: complete
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,7 +41,7 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-24-staged-internal-update-frozen
+  last_checkpoint_id: 2026-09-24-staged-internal-update-delivered
   last_checkpoint_file: .planning/devflow/verification/support-staged-internal-update.md
   compact_recommended: false
   compact_status: not_needed
@@ -71,15 +71,15 @@ context_management:
 goal_gate:
   id: support-staged-internal-update
   required: true
-  status: active
-  reason: the native Goal Contract covers the approved multi-slice staged update, isolated proof and existing PR delivery
+  status: complete
+  reason: the native Goal Contract is satisfied by complete source and installed proof plus existing PR delivery
   suggested_goal: none
 
 context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: plan_approved_staged_update_and_continue_to_tdd
+  last_decision: verified_staged_update_delivered_to_existing_pr
   last_goal_status: aligned
   goal_summary: Deliver durable stage and private transactional apply with source provenance, recovery, isolated proof and existing PR delivery.
 ---
@@ -90,11 +90,12 @@ context_health:
 
 New change: `support-staged-internal-update`; baseline `956197209b2d`.
 Native proposal/design/tasks and three capability delta specs are written.
-Implementation and independent Spec/Standards review are complete. Fresh
-regression is running against frozen source and fixtures, followed by exact-
-commit package and installed checks. The active task list records remaining
-verification and delivery work. Historical results below are preserved and
-do not substitute for current acceptance evidence.
+Implementation and independent Spec/Standards review are complete. All 1,246
+source cases are covered, including explicit reruns of opt-in cases. Exact
+implementation `ef69b01` passed prior-package upgrade, 113 installed tests and
+unchanged manifests without bytecode residue, and is delivered to the existing
+PR. All active change tasks are complete. Historical results below are preserved
+and do not substitute for current acceptance evidence.
 
 The requester approved the complete generic target, isolated verification and
 existing PR commit/push. Execution is auto-until-terminal, using only the new
@@ -105,11 +106,12 @@ Goal Contract is in the design. No external implementation provider is selected.
 
 ## Current Next Action
 
-Complete full source/Profile/Wrapper regression and exact-commit package checks,
-then update the existing PR. Independent review findings are repaired. Continue through
-every dependency-ready task and required review/package/delivery check without
-routine confirmation. Evidence is
-`.planning/devflow/verification/support-staged-internal-update.md`.
+No approved implementation or delivery work remains. Retain the exact package
+and its evidence. The cleanup planner refuses automatic reclamation for
+timestamp-preserving archives and installed symlinks; no cleanup is authorized
+or performed. Skill package layout/complexity remains a documented follow-up.
+Release, archive and live Desktop UI acceptance are excluded from this delivery.
+Evidence is `.planning/devflow/verification/support-staged-internal-update.md`.
 
 
 ## Completed Lifecycle Correction

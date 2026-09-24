@@ -16,10 +16,10 @@
 - Standing authority: implement, isolated tests, commit/push existing PR branch.
   Excluded: live installation/config/Desktop/provider changes, release, archive,
   destructive cleanup, new dependency or unrelated workflow expansion.
-- Status: implementation and independent Spec/Standards review complete;
-  review findings repaired with RED/GREEN evidence. Fresh frozen regression,
-  exact-commit package/installed verification and existing-PR delivery remain.
-  Continue through those checks using the active OpenSpec task list.
+- Status: complete. Implementation `ef69b01` is delivered to the existing PR;
+  1,246 source cases are covered, 113 installed tests pass, and exact package
+  manifests remain valid without bytecode. Spec/Standards findings are closed.
+  No release, archive or live environment change is included.
 - Previous `respect-custom-model-catalog` and other completed repairs remain
   archived. Preserve existing local verification roots and untracked research.
 
@@ -29,6 +29,7 @@
 |---|---|---|---|
 | STAGED-WORKFLOW-GUIDANCE-2026-09-23 | DEFER_AND_CONTINUE | Baseline workflow validator warns AGENTS lacks the Project-Directed Implementation Readiness heading. This change selects no external provider and records `implementation_readiness.required: false`; behavior and apply checks remain valid. | Unrelated workflow refresh is not authorized by this change. |
 | STAGED-OPEN-SPEC-CLI-2026-09-23 | CONTINUE_WITH_MINIMAL_GUARD | Global CLI is 1.3.1; native generated skills target 1.7.0. Reuse the existing retained isolated 1.7.0 executable for instructions/validation without modifying cache or global tooling. | Read-only tooling selection is within scope; no install or dependency change. |
+| STAGED-ARTIFACT-RETENTION-2026-09-24 | DEFER_AND_CONTINUE | The contract was sealed before creation with retention=retain. The macOS cleanup inspector rejects archive-preserved birth times and installed-layout symlinks; it does not certify automatic reclamation. Exact package/installed manifest and test proofs remain valid. Preserve every artifact, contract, observation and diagnostic plan; no cleanup is attempted. Workflow JSON has no issues and reports this as a visible warning. | A dedicated cleanup/inspector change may later reconcile these identities. No cleanup decision or workflow-code change is needed to deliver the verified runtime update. |
 
 
 ## Completed Cache-Free Correction: Custom Model Catalog Parity

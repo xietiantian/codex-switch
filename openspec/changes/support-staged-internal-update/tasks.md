@@ -28,16 +28,16 @@
 
 - [x] 5.1 Route existing one-shot update through the shared engine while preserving ordered/explicit versions, helper failure status, dry-run, existing target arguments, full/CLI-only checks and saved profile semantics; update public wrapper/parser tests and reject unsupported recipe/hook/deployment options before mutation.
 - [x] 5.2 Update neutral README/command documentation for stage/apply/status/cancel, stable output fields, actual Desktop reference, supported home contract, candidate retention, source policy, first-install modes and recovery limits; include no private defaults, business identifiers or unrelated workflow material.
-- [ ] 5.3 Register every new required runtime module in package/import validation and installer inventory where applicable, adjust historical package fixtures intentionally, and validate source shell/Python syntax plus a fresh isolated prior-to-candidate package upgrade and installed staged-update/import tests without bytecode residue.
+- [x] 5.3 Register every new required runtime module in package/import validation and installer inventory where applicable, adjust historical package fixtures intentionally, and validate source shell/Python syntax plus a fresh isolated prior-to-candidate package upgrade and installed staged-update/import tests without bytecode residue.
 
 ## 6. Integrated native validation and review
 
 - [x] 6.1 Run focused staged/parity/catalog/lifecycle/first-install/transaction/runtime-binding/update suites and fresh full native regression including the profile script entrypoint; record exact command results, counts and genuine failures, with fresh HOME/store/App fixtures and `PYTHONDONTWRITEBYTECODE=1` / Python `-B`.
 - [x] 6.2 Run complete native stage/apply and current-runtime preparation with verified real runtime collectors in isolated fixtures and a loopback provider, including profileless current-runtime adoption after successful CLI-only bootstrap, cache-free defaults, custom same-slug source, recapture, repeat apply and rollback; do not substitute mocks for schema/feature/export/probe evidence or claim live Desktop acceptance.
 - [x] 6.3 Complete independent read-only Spec and Standards review under native bounded contracts, repair in-scope findings, and rerun only affected checks plus required final integration; classify unrelated findings in the tracked register without expanding the critical path.
-- [ ] 6.4 Run pinned OpenSpec 1.7 strict change/all validation, workflow-state JSON validation, shell syntax and diff checks; reconcile all scenario evidence, update native state/ledger and record generated-artifact retention or terminal cleanup receipts with no false completion claim.
+- [x] 6.4 Run pinned OpenSpec 1.7 strict change/all validation, workflow-state JSON validation, shell syntax and diff checks; reconcile all scenario evidence, update native state/ledger and record generated-artifact retention or terminal cleanup receipts with no false completion claim.
 
 ## 7. Authorized existing-PR delivery
 
-- [ ] 7.1 Commit the reviewed complete change to the existing branch, verify an exact-commit package and manifest before/after isolated installed tests, then push to the existing PR under standing authorization; preserve all unrelated untracked/historical artifacts and exclude live installation, release and archive.
-- [ ] 7.2 Read back the delivered revision/PR state, record final validation/review/package evidence and any non-blocking findings, and mark completion only when every required behavior is proven and no approved work remains.
+- [x] 7.1 Commit the reviewed complete change to the existing branch, verify an exact-commit package and manifest before/after isolated installed tests, then push to the existing PR under standing authorization; preserve all unrelated untracked/historical artifacts and exclude live installation, release and archive.
+- [x] 7.2 Read back the delivered revision/PR state, record final validation/review/package evidence and any non-blocking findings, and mark completion only when every required behavior is proven and no approved work remains.
