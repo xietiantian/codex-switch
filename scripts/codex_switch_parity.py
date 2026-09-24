@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from dataclasses import FrozenInstanceError, dataclass, replace
+from dataclasses import FrozenInstanceError, dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Mapping
@@ -25,6 +25,7 @@ from codex_switch_protocol_adapter import (
     ProtocolAdapterRule,
     THREAD_RESUME_HISTORY_RULE_ID,
     generate_app_server_schema,
+    managed_probe_process,
     protocol_adapter_rule_manifest,
     protocol_adapter_rule_set_digest,
 )
@@ -708,6 +709,8 @@ def _run_feature_command(
 ) -> FeatureCommandResult:
     environment = dict(os.environ)
     environment["CODEX_HOME"] = str(request.codex_home)
+    environment["HOME"] = str(request.codex_home)
+    environment["XDG_CONFIG_HOME"] = str(request.codex_home / ".config")
     try:
         process = subprocess.Popen(
             request.command,
@@ -716,6 +719,7 @@ def _run_feature_command(
             stderr=subprocess.PIPE,
             text=False,
             env=environment,
+            cwd=request.codex_home,
             start_new_session=True,
         )
     except OSError as exc:
@@ -725,54 +729,56 @@ def _run_feature_command(
             stderr=str(exc),
         )
 
-    stdout_capture = _BoundedCapture(request.max_output_bytes)
-    stderr_capture = _BoundedCapture(request.max_output_bytes)
-    threads = (
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stdout, stdout_capture),
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stderr, stderr_capture),
-            daemon=True,
-        ),
-    )
-    for thread in threads:
-        thread.start()
+    threads: list[threading.Thread] = []
+    with managed_probe_process(process, threads=threads, terminate=_terminate_parity_probe_process_group):
+        stdout_capture = _BoundedCapture(request.max_output_bytes)
+        stderr_capture = _BoundedCapture(request.max_output_bytes)
+        threads.extend((
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stdout, stdout_capture),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stderr, stderr_capture),
+                daemon=True,
+            ),
+        ))
+        for thread in threads:
+            thread.start()
 
-    timed_out = False
-    try:
-        process.wait(timeout=request.timeout_seconds)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-    finally:
-        if timed_out:
+        timed_out = False
+        try:
+            process.wait(timeout=request.timeout_seconds)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+        finally:
+            if timed_out:
+                _terminate_feature_process(process)
+
+        deadline = time.monotonic() + 0.5
+        for thread in threads:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        if any(thread.is_alive() for thread in threads):
+            timed_out = True
             _terminate_feature_process(process)
-
-    deadline = time.monotonic() + 0.5
-    for thread in threads:
-        thread.join(timeout=max(0.0, deadline - time.monotonic()))
-    if any(thread.is_alive() for thread in threads):
-        timed_out = True
-        _terminate_feature_process(process)
-    for stream in (process.stdout, process.stderr):
-        if stream is not None:
-            try:
-                stream.close()
-            except OSError:
-                pass
-    stdout, stdout_truncated = stdout_capture.render()
-    stderr, stderr_truncated = stderr_capture.render()
-    return FeatureCommandResult(
-        returncode=process.poll(),
-        stdout=stdout,
-        stderr=stderr,
-        timed_out=timed_out,
-        stdout_truncated=stdout_truncated,
-        stderr_truncated=stderr_truncated,
-    )
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        stdout, stdout_truncated = stdout_capture.render()
+        stderr, stderr_truncated = stderr_capture.render()
+        return FeatureCommandResult(
+            returncode=process.poll(),
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+            stdout_truncated=stdout_truncated,
+            stderr_truncated=stderr_truncated,
+        )
 
 
 @dataclass(frozen=True)
@@ -2707,8 +2713,18 @@ class ParityCandidate:
     adapter_rule_set_sha256: str
     active_runtime_config_path: Path | None = None
     canonical_internal_binding: RuntimeBinding | None = None
+    auth_payload: bytes | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.auth_payload is not None:
+            if not isinstance(self.auth_payload, bytes) or len(self.auth_payload) > 1024 * 1024:
+                raise ParityValidationError("parity.candidate.auth_invalid", "Private authentication payload is invalid.")
+            try:
+                auth = json.loads(self.auth_payload, object_pairs_hook=_reject_overlay_duplicate_keys)
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise ParityValidationError("parity.candidate.auth_invalid", "Private authentication payload is malformed.") from exc
+            if not isinstance(auth, dict):
+                raise ParityValidationError("parity.candidate.auth_invalid", "Private authentication payload must be an object.")
         if self.official_binding.profile != "openai-official":
             raise ParityValidationError(
                 "parity.candidate.official_binding_invalid",
@@ -3285,6 +3301,10 @@ class ConfigInputs:
     sources: tuple[tuple[Path, str], ...]
     source_states: tuple[tuple[Path, int, int, int], ...] = ()
     missing_sources: tuple[Path, ...] = ()
+    profile_source: Path | None = None
+
+    def destination_for(self, source: Path) -> Path:
+        return self.profile_config if source == self.profile_source else source
 
     @classmethod
     def capture(
@@ -3293,8 +3313,10 @@ class ConfigInputs:
         profile_config: Path,
         source_paths: tuple[Path, ...],
         optional_sources: tuple[Path, ...] = (),
+        profile_source: Path | None = None,
     ) -> ConfigInputs:
-        if any(path == profile_config or path not in source_paths for path in optional_sources):
+        profile_source = profile_source or profile_config
+        if any(path == profile_source or path not in source_paths for path in optional_sources):
             raise ParityValidationError(
                 "parity.config.inputs_invalid", "Only shared config sources may be optional."
             )
@@ -3314,6 +3336,7 @@ class ConfigInputs:
             snapshots.append(snapshot)
         return cls(
             profile_config=profile_config,
+            profile_source=profile_source,
             sources=tuple(
                 (snapshot.path, snapshot.sha256)
                 for snapshot in snapshots
@@ -3378,7 +3401,11 @@ class ConfigInputs:
                 )
             seen_paths.add(canonical_path)
             normalized.append((canonical_path, digest))
-        if profile_config not in seen_paths:
+        profile_source = _canonical_path(
+            self.profile_source or profile_config,
+            code="parity.config.inputs_invalid", field_name="profile source",
+        )
+        if profile_source not in seen_paths or (profile_source != profile_config and profile_config in seen_paths):
             raise ParityValidationError(
                 "parity.config.inputs_invalid",
                 "Internal profile config must be one parity config source.",
@@ -3431,7 +3458,7 @@ class ConfigInputs:
         missing_sources = tuple(self.missing_sources)
         if (
             len(set(missing_sources)) != len(missing_sources)
-            or any(path == profile_config or path not in seen_paths for path in missing_sources)
+            or any(path == profile_source or path not in seen_paths for path in missing_sources)
             or any(
                 self.expected_sha256(path) != hashlib.sha256(b"").hexdigest()
                 or self.expected_state(path) != (0, 0, 0)
@@ -3443,6 +3470,7 @@ class ConfigInputs:
             )
         object.__setattr__(self, "missing_sources", tuple(sorted(missing_sources, key=str)))
         object.__setattr__(self, "profile_config", profile_config)
+        object.__setattr__(self, "profile_source", profile_source)
         object.__setattr__(
             self,
             "sources",
@@ -3548,7 +3576,7 @@ class ConfigProjection:
                 "parity.config.projection_invalid",
                 "Config projection health disagrees with its findings.",
             )
-        source_paths = {path for path, _digest in self.config_inputs.sources}
+        source_paths = {self.config_inputs.destination_for(path) for path, _digest in self.config_inputs.sources}
         normalized_payloads: list[tuple[Path, bytes]] = []
         payload_paths: set[Path] = set()
         for entry in self.payloads:
@@ -3995,15 +4023,15 @@ def prepare_parity_config_projection(
             )
 
     try:
-        documents[config_inputs.profile_config] = (
+        documents[config_inputs.profile_source] = (
             _project_internal_profile_config(
-                documents[config_inputs.profile_config],
+                documents[config_inputs.profile_source],
                 overlay_path=canonical_overlay,
             )
         )
         payloads = tuple(
             (
-                path,
+                config_inputs.destination_for(path),
                 documents[path].text.encode("utf-8"),
             )
             for path, _digest in config_inputs.sources
@@ -4047,7 +4075,9 @@ def prepare_parity_config_projection(
     changed_paths = tuple(
         path
         for path, payload in payloads
-        if payload != sources[path].payload or path in config_inputs.missing_sources
+        if payload != sources[config_inputs.profile_source if path == config_inputs.profile_config else path].payload
+        or path in config_inputs.missing_sources
+        or (path == config_inputs.profile_config and config_inputs.profile_source != path)
     )
     return ConfigProjection(
         config_inputs=config_inputs,
@@ -4056,7 +4086,7 @@ def prepare_parity_config_projection(
         healthy=True,
         findings=(),
         changed_paths=changed_paths,
-        max_threads_source=max_threads_source,
+        max_threads_source=(config_inputs.destination_for(max_threads_source) if max_threads_source is not None else None),
     )
 
 
@@ -4687,6 +4717,8 @@ def _run_parity_probe_command(
     command_deadline = time.monotonic() + request.timeout_seconds
     environment = dict(os.environ)
     environment["CODEX_HOME"] = str(request.codex_home)
+    environment["HOME"] = str(request.codex_home)
+    environment["XDG_CONFIG_HOME"] = str(request.codex_home / ".config")
     stdin = subprocess.PIPE if request.stdin_messages else subprocess.DEVNULL
     try:
         process = subprocess.Popen(
@@ -4696,6 +4728,7 @@ def _run_parity_probe_command(
             stderr=subprocess.PIPE,
             text=False,
             env=environment,
+            cwd=request.codex_home,
             start_new_session=True,
         )
     except OSError:
@@ -4704,81 +4737,83 @@ def _run_parity_probe_command(
             stdout="",
             stderr="",
         )
-    stdout_capture = _BoundedCapture(request.max_output_bytes)
-    stderr_capture = _BoundedCapture(request.max_output_bytes)
-    threads = (
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stdout, stdout_capture),
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stderr, stderr_capture),
-            daemon=True,
-        ),
-    )
-    for thread in threads:
-        thread.start()
-    timed_out = False
-    process_group_terminated = False
-    try:
-        if request.stdin_messages and process.stdin is not None:
-            for message in request.stdin_messages:
-                # EOF shuts down current asynchronous app-server dispatch.
-                reply = _send_probe_message(process, stdout_capture, message, command_deadline)
-                if "id" in message and (reply is None or "error" in reply):
-                    break
-            else:
-                if request.name == "typed_subagent_v2":
-                    _complete_typed_probe(process, stdout_capture, command_deadline)
-            process.stdin.close()
-        process.wait(timeout=max(0.0, command_deadline - time.monotonic()))
-    except (BrokenPipeError, OSError):
-        if process.stdin is not None:
-            try:
-                process.stdin.close()
-            except OSError:
-                pass
-        # Reap a peer that closed its input without escaping the same bound.
+    threads: list[threading.Thread] = []
+    with managed_probe_process(process, threads=threads, terminate=_terminate_parity_probe_process_group):
+        stdout_capture = _BoundedCapture(request.max_output_bytes)
+        stderr_capture = _BoundedCapture(request.max_output_bytes)
+        threads.extend((
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stdout, stdout_capture),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stderr, stderr_capture),
+                daemon=True,
+            ),
+        ))
+        for thread in threads:
+            thread.start()
+        timed_out = False
+        process_group_terminated = False
         try:
+            if request.stdin_messages and process.stdin is not None:
+                for message in request.stdin_messages:
+                    # EOF shuts down current asynchronous app-server dispatch.
+                    reply = _send_probe_message(process, stdout_capture, message, command_deadline)
+                    if "id" in message and (reply is None or "error" in reply):
+                        break
+                else:
+                    if request.name == "typed_subagent_v2":
+                        _complete_typed_probe(process, stdout_capture, command_deadline)
+                process.stdin.close()
             process.wait(timeout=max(0.0, command_deadline - time.monotonic()))
+        except (BrokenPipeError, OSError):
+            if process.stdin is not None:
+                try:
+                    process.stdin.close()
+                except OSError:
+                    pass
+            # Reap a peer that closed its input without escaping the same bound.
+            try:
+                process.wait(timeout=max(0.0, command_deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                process_group_terminated = _terminate_parity_probe_process_group(process)
         except subprocess.TimeoutExpired:
             timed_out = True
-            process_group_terminated = _terminate_parity_probe_process_group(process)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        process_group_terminated = _terminate_parity_probe_process_group(
-            process
-        )
-    deadline = time.monotonic() + 0.5
-    for thread in threads:
-        thread.join(timeout=max(0.0, deadline - time.monotonic()))
-    if any(thread.is_alive() for thread in threads):
-        timed_out = True
-        process_group_terminated = _terminate_parity_probe_process_group(
-            process
-        )
+            process_group_terminated = _terminate_parity_probe_process_group(
+                process
+            )
         deadline = time.monotonic() + 0.5
         for thread in threads:
             thread.join(timeout=max(0.0, deadline - time.monotonic()))
-    for stream in (process.stdout, process.stderr):
-        if stream is not None:
-            try:
-                stream.close()
-            except OSError:
-                pass
-    stdout, stdout_truncated = stdout_capture.render()
-    stderr, stderr_truncated = stderr_capture.render()
-    return ParityProbeCommandResult(
-        returncode=process.poll(),
-        stdout=stdout,
-        stderr=stderr,
-        timed_out=timed_out,
-        stdout_truncated=stdout_truncated,
-        stderr_truncated=stderr_truncated,
-        process_group_terminated=process_group_terminated,
-    )
+        if any(thread.is_alive() for thread in threads):
+            timed_out = True
+            process_group_terminated = _terminate_parity_probe_process_group(
+                process
+            )
+            deadline = time.monotonic() + 0.5
+            for thread in threads:
+                thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        stdout, stdout_truncated = stdout_capture.render()
+        stderr, stderr_truncated = stderr_capture.render()
+        return ParityProbeCommandResult(
+            returncode=process.poll(),
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+            stdout_truncated=stdout_truncated,
+            stderr_truncated=stderr_truncated,
+            process_group_terminated=process_group_terminated,
+        )
 
 
 _PARITY_PROBE_PARENT_MARKER = "parity-parent-ok"
@@ -7286,6 +7321,20 @@ def _validate_parity_bundle_artifacts(
     return paths
 
 
+def catalog_provenance_for_bundle(bundle: ParityBundle) -> dict[str, object]:
+    receipt, overlay = bundle.receipt, bundle.overlay
+    return {
+        "schema_version": 1,
+        "source_kind": bundle.manifest_metadata["parity_model_catalog_kind"],
+        "source_path": str(overlay.source_catalog),
+        "source_sha256": overlay.source_catalog_sha256,
+        "overlay_path": str(receipt.overlay_path),
+        "overlay_sha256": overlay.overlay_sha256,
+        "binary_sha256": receipt.internal_fingerprint.binary_sha256,
+        "source_binding": next((dict(source.canonical_payload()) for source in receipt.model_sources if source.side == "internal"), None),
+    }
+
+
 def _parity_bundle_manifest_metadata(
     *,
     receipt: ParityReceipt,
@@ -7890,20 +7939,22 @@ class _ParityConfigIdentity:
 
 def _load_cli_version(cli_path: Path, timeout_seconds: float) -> str:
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             [str(cli_path), "--version"],
-            check=False,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=timeout_seconds,
+            start_new_session=True,
         )
+        with managed_probe_process(process):
+            output, _stderr = process.communicate(timeout=timeout_seconds)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ParityValidationError(
             "parity.preparation.version_failed",
             "Parity CLI version command failed.",
         ) from exc
-    output = result.stdout or b""
-    if result.returncode != 0 or len(output) > 16 * 1024:
+    output = output or b""
+    if process.returncode != 0 or len(output) > 16 * 1024:
         raise ParityValidationError(
             "parity.preparation.version_failed",
             "Parity CLI version command failed.",
@@ -8043,19 +8094,20 @@ def _dump_bundled_model_catalog(cli_path: Path, work_root: Path, timeout_seconds
             )
         except OSError as exc:
             raise ParityValidationError("parity.model.export_failed", "Bundled model export could not start.") from exc
-        stdout = _BoundedCapture(MAX_PARITY_CATALOG_BYTES)
-        stderr = _BoundedCapture(64 * 1024)
-        threads = tuple(threading.Thread(target=_read_bounded_stream, args=(stream, capture), daemon=True)
-                        for stream, capture in ((process.stdout, stdout), (process.stderr, stderr)))
-        for thread in threads:
-            thread.start()
-        timed_out = False
-        try:
-            process.wait(timeout=max(0.0, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            _terminate_parity_probe_process_group(process)
-        finally:
+        threads: list[threading.Thread] = []
+        with managed_probe_process(process, threads=threads, terminate=_terminate_parity_probe_process_group):
+            stdout = _BoundedCapture(MAX_PARITY_CATALOG_BYTES)
+            stderr = _BoundedCapture(64 * 1024)
+            threads.extend(threading.Thread(target=_read_bounded_stream, args=(stream, capture), daemon=True)
+                            for stream, capture in ((process.stdout, stdout), (process.stderr, stderr)))
+            for thread in threads:
+                thread.start()
+            timed_out = False
+            try:
+                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                _terminate_parity_probe_process_group(process)
             for thread in threads:
                 thread.join(timeout=0.5)
             if any(thread.is_alive() for thread in threads):
@@ -8066,15 +8118,15 @@ def _dump_bundled_model_catalog(cli_path: Path, work_root: Path, timeout_seconds
             for stream in (process.stdout, process.stderr):
                 if stream is not None:
                     stream.close()
-        if timed_out:
-            raise ParityValidationError("parity.model.export_timeout", "Bundled model export exceeded its time limit.")
-        if stdout.discarded or stderr.discarded:
-            raise ParityValidationError("parity.model.export_oversized", "Bundled model export exceeded its output limit.")
-        if process.returncode != 0:
-            raise ParityValidationError(
-                "parity.model.export_failed", "Runtime does not provide a successful offline bundled model export.",
-            )
-        return bytes(stdout.buffer)
+            if timed_out:
+                raise ParityValidationError("parity.model.export_timeout", "Bundled model export exceeded its time limit.")
+            if stdout.discarded or stderr.discarded:
+                raise ParityValidationError("parity.model.export_oversized", "Bundled model export exceeded its output limit.")
+            if process.returncode != 0:
+                raise ParityValidationError(
+                    "parity.model.export_failed", "Runtime does not provide a successful offline bundled model export.",
+                )
+            return bytes(stdout.buffer)
 
 
 def _load_default_model_source(
@@ -8206,11 +8258,79 @@ def _source_catalog_from_candidate(
         raise ParityValidationError(
             "parity.preparation.config_invalid", "Managed bundled model source is not profile-local.",
         )
-    _validate_catalog_kind_receipt(candidate, source_catalog, source_kind)
+    if "parity_catalog_provenance" in manifest:
+        _validated_catalog_provenance(manifest, managed_overlay, source_catalog, source_kind)
+    else:
+        _validate_catalog_kind_receipt(candidate, source_catalog, source_kind)
     if source_kind != "custom":
         # A new update selects current cache/binary evidence, not the old dump.
         return candidate.internal_binding.codex_home / "models_cache.json", False
     return source_catalog, source_kind == "custom"
+
+
+def _validated_catalog_provenance(manifest: Mapping[str, object], overlay: Path, source: Path, kind: str) -> Mapping[str, object]:
+    code = "parity.preparation.config_invalid"
+    raw = manifest.get("parity_catalog_provenance")
+    if not isinstance(raw, Mapping) or set(raw) != {"schema_version", "source_kind", "source_path", "source_sha256", "overlay_path", "overlay_sha256", "binary_sha256", "source_binding"}:
+        raise ParityValidationError(code, "Catalog provenance record is invalid.")
+    if (raw.get("schema_version") != 1 or raw.get("source_kind") != kind
+        or raw.get("source_path") != str(source) or raw.get("overlay_path") != str(overlay)
+        or raw.get("source_sha256") != manifest.get("parity_source_catalog_sha256")
+        or raw.get("overlay_sha256") != manifest.get("parity_overlay_sha256")):
+        raise ParityValidationError(code, "Catalog provenance identities disagree.")
+    for key in ("source_sha256", "overlay_sha256", "binary_sha256"):
+        _require_sha256(raw.get(key), code=code, field_name=key)
+    observed_overlay = _regular_file_snapshot(overlay, code=code, label="managed catalog overlay", max_bytes=MAX_PARITY_CATALOG_BYTES)
+    if observed_overlay.sha256 != raw["overlay_sha256"]:
+        raise ParityValidationError(code, "Managed catalog overlay identity changed.")
+    if kind == "custom":
+        if raw["source_binding"] is not None:
+            raise ParityValidationError(code, "Custom catalog has default binding evidence.")
+        observed_source = _regular_file_snapshot(source, code=code, label="original catalog", max_bytes=MAX_PARITY_CATALOG_BYTES)
+        # Source edits are a fresh candidate; capture and frozen bundle checks
+        # separately enforce the exact generation they observed.
+    else:
+        refs = _parse_model_catalog_references([raw["source_binding"]])
+        if len(refs) != 1 or refs[0].side != "internal" or "runtime-" + refs[0].kind != kind or refs[0].path != source or refs[0].sha256 != raw["source_sha256"] or refs[0].binary_sha256 != raw["binary_sha256"]:
+            raise ParityValidationError(code, "Catalog provenance Runtime Binding disagrees.")
+    return raw
+
+
+def capture_catalog_provenance(store: object, source_config: Path) -> dict[str, object]:
+    """Preserve only verified origin; capture deliberately invalidates health."""
+    from types import SimpleNamespace
+    from codex_switch_home_select import resolve_runtime_homes
+    snapshot = _regular_file_snapshot(source_config, code="parity.preparation.config_invalid", label="capture config", max_bytes=MAX_PARITY_CONFIG_BYTES, capture_payload=True)
+    config = ConfigDocument.parse(snapshot.payload.decode("utf-8"), "capture config")
+    profile_config = store.profile_dir("internal") / "config.toml"
+    overlay = profile_config.parent / "parity/model-catalog.json"
+    configured = config.data.get("model_catalog_json")
+    if not isinstance(configured, str) or Path(configured).expanduser() != overlay:
+        return {}
+    manifest = store.load_manifest("internal")
+    home = resolve_runtime_homes(store).internal.path
+    candidate = SimpleNamespace(source_config=ConfigInputs.capture(profile_config=profile_config, profile_source=source_config, source_paths=(source_config,)), internal_manifest=manifest, internal_binding=SimpleNamespace(codex_home=home))
+    _source_catalog_from_candidate(candidate, configured_path=overlay)
+    source = Path(manifest["parity_source_catalog_path"])
+    kind = manifest.get("parity_model_catalog_kind", "custom")
+    if "parity_catalog_provenance" not in manifest:
+        receipt_path = Path(manifest["parity_receipt_path"])
+        receipt = json.loads(_regular_file_snapshot(receipt_path, code="parity.preparation.config_invalid", label="catalog origin receipt", max_bytes=MAX_PARITY_RECEIPT_BYTES, capture_payload=True).payload)
+        internal = receipt["internal_fingerprint"]
+        if internal.get("source_catalog_sha256") != manifest["parity_source_catalog_sha256"] or receipt.get("overlay", {}).get("sha256") != manifest.get("parity_overlay_sha256"):
+            raise ParityValidationError("parity.preparation.config_invalid", "Historical catalog origin identities disagree.")
+        manifest["parity_catalog_provenance"] = {
+            "schema_version": 1, "source_kind": kind,
+            "source_path": str(source), "source_sha256": manifest["parity_source_catalog_sha256"],
+            "overlay_path": str(overlay), "overlay_sha256": manifest["parity_overlay_sha256"],
+            "binary_sha256": internal["binary_sha256"],
+            "source_binding": next((item for item in receipt.get("model_sources", []) if item.get("side") == "internal"), None),
+        }
+    _validated_catalog_provenance(manifest, overlay, source, kind)
+    original = _regular_file_snapshot(source, code="parity.preparation.config_invalid", label="captured original catalog", max_bytes=MAX_PARITY_CATALOG_BYTES)
+    if original.sha256 != manifest["parity_source_catalog_sha256"]:
+        raise ParityValidationError("parity.preparation.config_invalid", "Captured catalog source changed.")
+    return {key: _plain_value(manifest[key]) for key in ("parity_catalog_provenance", "parity_source_catalog_path", "parity_source_catalog_sha256", "parity_overlay_path", "parity_overlay_sha256", "parity_policy_version") } | {"parity_model_catalog_kind": kind, "codex_home": str(home), "home_selection_confirmed": True}
 
 
 def _validate_catalog_kind_receipt(
@@ -8302,7 +8422,7 @@ def _config_identity(
             "Parity candidate config inputs are invalid.",
         )
     expected_sources = {
-        config_inputs.profile_config,
+        config_inputs.profile_source,
         candidate.official_binding.codex_home / "config.toml",
     }
     if (
@@ -8320,9 +8440,9 @@ def _config_identity(
             "Parity candidate config sources are incomplete.",
         )
     profile_source = _read_parity_config_source(
-        path=config_inputs.profile_config,
+        path=config_inputs.profile_source,
         expected_sha256=config_inputs.expected_sha256(
-            config_inputs.profile_config
+            config_inputs.profile_source
         ),
         _source_observer=None,
     )
@@ -8424,6 +8544,18 @@ def _config_identity(
         source_catalog_sha256=source_snapshot.sha256 if source_snapshot is not None else None,
         custom_model_catalog=custom_model_catalog,
     )
+
+
+def native_probe_config_payload(payload: bytes) -> bytes:
+    """Project probe-only config; final requested hook/plugin configuration is retained."""
+    document = ConfigDocument.parse(payload.decode("utf-8"), "native probe config")
+    excluded = {"hooks", "notify", "mcp_servers", "plugins", "skills", "projects"}
+    projected = document.select(
+        include_top_level=lambda path: bool(path) and path[0] not in excluded,
+        include_table=lambda path, _array: bool(path) and path[0] not in excluded,
+        label="native probe config without external integrations",
+    )
+    return projected.text.encode("utf-8")
 
 
 def project_parity_runtime_config_payload(
@@ -8583,6 +8715,7 @@ def _revalidate_preparation_fingerprints(
         )
     refreshed_config = ConfigInputs.capture(
         profile_config=source_config.profile_config,
+        profile_source=source_config.profile_source,
         source_paths=tuple(
             path
             for path, _digest in source_config.sources
@@ -8809,10 +8942,10 @@ def prepare_parity_bundle(
             probe_parity_dir / "capability-receipt.json"
         )
         probe_config_path = probe_home / "config.toml"
-        probe_config_payload = project_parity_runtime_config_payload(
+        probe_config_payload = native_probe_config_payload(project_parity_runtime_config_payload(
             runtime_payload,
             overlay_path=probe_overlay_path,
-        )
+        ))
         _write_private_staged_payload(
             probe_overlay_path,
             overlay.overlay_payload,
@@ -8825,13 +8958,14 @@ def prepare_parity_bundle(
             probe_config_path,
             probe_config_payload,
         )
-        official_effective_home = candidate.official_binding.codex_home
-        if official_effective_home / "config.toml" in candidate.source_config.missing_sources:
-            # Probe the planned empty configuration without creating the target
-            # home before transactional publication.
-            official_effective_home = probe_root / "official-effective"
-            official_effective_home.mkdir(mode=0o700)
-            _write_private_staged_payload(official_effective_home / "config.toml", b"")
+        if candidate.auth_payload is not None:
+            _write_private_staged_payload(probe_home / "auth.json", candidate.auth_payload)
+        official_effective_home = probe_root / "official-effective"
+        official_effective_home.mkdir(mode=0o700)
+        _write_private_staged_payload(
+            official_effective_home / "config.toml",
+            native_probe_config_payload(config_projection.payload_for(candidate.official_binding.codex_home / "config.toml")),
+        )
         official_features = collect_feature_inventory(
             side="official",
             cli_path=candidate.official_binding.backend_cli,
@@ -9056,10 +9190,10 @@ def prepare_parity_bundle(
     staged_capability_receipt_path = (
         bundle.staging_root / "capability-receipt.json"
     )
-    staged_runtime_config_payload = project_parity_runtime_config_payload(
+    staged_runtime_config_payload = native_probe_config_payload(project_parity_runtime_config_payload(
         runtime_payload,
         overlay_path=bundle.staged_overlay_path,
-    )
+    ))
     model_sources = tuple(
         replace(source, staged_path=bundle.staging_root / source.reference.path.name)
         if source.reference.kind == "bundled" else source
@@ -9227,10 +9361,12 @@ def _revalidate_parity_bundle_inputs(
                 "parity.bundle.candidate_stale",
                 "Source model catalog changed before promotion.",
             )
-    if include_config_sources:
+    if include_config_sources or bundle.config_projection.config_inputs.profile_source != bundle.config_projection.config_inputs.profile_config:
         for path, expected_sha256 in (
             bundle.config_projection.config_inputs.sources
         ):
+            if not include_config_sources and path != bundle.config_projection.config_inputs.profile_source:
+                continue
             if path in bundle.config_projection.config_inputs.missing_sources:
                 _read_parity_config_source(
                     path=path, expected_sha256=expected_sha256,

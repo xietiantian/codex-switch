@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: complete
+current_stage: verification
 
 current_change:
-  id: respect-custom-model-catalog
-  status: archived
+  id: support-staged-internal-update
+  status: in_progress
 
 standing_milestone:
   status: inactive
@@ -31,9 +31,9 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: true
+  verification_passed: false
   state_updated: true
-  archive_allowed: true
+  archive_allowed: false
   release_allowed: false
 
 implementation_readiness:
@@ -41,13 +41,13 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-21-parity-lifecycle-correction
-  last_checkpoint_file: .planning/devflow/verification/respect-custom-model-catalog.md
+  last_checkpoint_id: 2026-09-24-staged-internal-update-frozen
+  last_checkpoint_file: .planning/devflow/verification/support-staged-internal-update.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-09-21
+  compact_updated_at: 2026-09-24
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -69,22 +69,48 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: respect-custom-model-catalog
+  id: support-staged-internal-update
   required: true
-  status: complete
-  reason: the active repair contract authorizes implementation, isolated verification, and a pull request
+  status: active
+  reason: the native Goal Contract covers the approved multi-slice staged update, isolated proof and existing PR delivery
   suggested_goal: none
 
 context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: archive_verified_parity_lifecycle_correction
+  last_decision: plan_approved_staged_update_and_continue_to_tdd
   last_goal_status: aligned
-  goal_summary: Preserve verified parity across final capture, rebind and activation with independent homes.
+  goal_summary: Deliver durable stage and private transactional apply with source provenance, recovery, isolated proof and existing PR delivery.
 ---
 
 # Workflow State
+
+## Active Staged Update Plan
+
+New change: `support-staged-internal-update`; baseline `956197209b2d`.
+Native proposal/design/tasks and three capability delta specs are written.
+Implementation and independent Spec/Standards review are complete. Fresh
+regression is running against frozen source and fixtures, followed by exact-
+commit package and installed checks. The active task list records remaining
+verification and delivery work. Historical results below are preserved and
+do not substitute for current acceptance evidence.
+
+The requester approved the complete generic target, isolated verification and
+existing PR commit/push. Execution is auto-until-terminal, using only the new
+OpenSpec task list. No live workstation/config/provider/Desktop changes,
+release, destructive cleanup or unrelated workflow update is authorized.
+Main owns final planning/integration and the runtime Goal, if used; the durable
+Goal Contract is in the design. No external implementation provider is selected.
+
+## Current Next Action
+
+Complete full source/Profile/Wrapper regression and exact-commit package checks,
+then update the existing PR. Independent review findings are repaired. Continue through
+every dependency-ready task and required review/package/delivery check without
+routine confirmation. Evidence is
+`.planning/devflow/verification/support-staged-internal-update.md`.
+
 
 ## Completed Lifecycle Correction
 
@@ -155,6 +181,6 @@ DevFlow, static, JSON, package, and asset gates pass. Gate `5cc1e103...` is
 resolved for one exact commit/push and the `v0.1.15` Auto Release chain, with
 every `v0.1.14` mutation excluded.
 
-## Next Action
+## Historical Next Action
 
-No implementation tasks remain for this repair. Preserve the verified test entrypoint; live installation and provider-backed Desktop UI acceptance remain requester actions.
+No implementation tasks remained for the previous repair. Preserve the verified test entrypoint; live installation and provider-backed Desktop UI acceptance remain requester actions.

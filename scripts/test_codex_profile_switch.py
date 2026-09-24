@@ -204,6 +204,7 @@ def write_required_release_modules(scripts_dir: Path) -> None:
     )
     (scripts_dir / "codex_profile_switch.py").write_text("VALUE = 1\n")
     for name in (
+        "codex_switch_update.py",
         "codex_switch_parity.py",
         "codex_switch_runtime_binding.py",
         "codex_switch_app_proxy.py",
@@ -214,9 +215,14 @@ def write_required_release_modules(scripts_dir: Path) -> None:
         (scripts_dir / name).write_text("VALUE = 1\n")
 
 
-def write_fake_codex(path: Path, label: str) -> None:
+def write_fake_codex(path: Path, label: str, *, version: str | None = None) -> None:
     path.write_text(
         "#!/usr/bin/env sh\n"
+        + (
+            f'if [ "${{1:-}}" = "--version" ]; then echo "codex-cli {version}"; exit 0; fi\n'
+            if version is not None else ""
+        )
+        +
         "if [ \"${1:-}\" = \"login\" ]; then\n"
         "  if grep -q '^profile = ' \"$CODEX_HOME/config.toml\" 2>/dev/null; then\n"
         "    echo legacy-profile-config >&2\n"
@@ -513,6 +519,9 @@ def write_fake_app_server_smoke_codex(
     version: str = "codex-cli 9.9.9",
     exit_241_after_plugin_list: bool = False,
 ) -> None:
+    typed_responses = json.loads(
+        (SCRIPT.parent.parent / "evals/fixtures/typed-subagent-app-server.json").read_text()
+    )
     write_fake_script(
         path,
         "#!/usr/bin/env python3\n"
@@ -520,6 +529,7 @@ def write_fake_app_server_smoke_codex(
         "from pathlib import Path\n"
         f"VERSION = {version!r}\n"
         f"EXIT_241 = {exit_241_after_plugin_list!r}\n"
+        f"TYPED_RESPONSES = {typed_responses!r}\n"
         "if '--version' in sys.argv:\n"
         "    print(VERSION)\n"
         "    raise SystemExit(0)\n"
@@ -532,6 +542,25 @@ def write_fake_app_server_smoke_codex(
         "            'PluginListMarketplaceKind': {'enum': ['local', 'created-by-me-remote']},\n"
         "        }\n"
         "    }, sort_keys=True))\n"
+        "    roots = {\n"
+        "        'ClientRequest.json': ['initialize', 'config/read', 'model/list', 'collaborationMode/list', 'thread/start', 'turn/start'],\n"
+        "        'ClientNotification.json': ['initialized'],\n"
+        "        'ServerRequest.json': ['item/tool/call', 'execCommandApproval'],\n"
+        "        'ServerNotification.json': ['item/completed', 'turn/completed'],\n"
+        "    }\n"
+        "    for name, methods in roots.items():\n"
+        "        variants = []\n"
+        "        for method in methods:\n"
+        "            properties = {'method': {'type': 'string', 'enum': [method]}, 'params': {'type': 'object', 'properties': {}}}\n"
+        "            required = ['method', 'params']\n"
+        "            if name.endswith('Request.json'):\n"
+        "                properties['id'] = {'type': 'string'}\n"
+        "                required.append('id')\n"
+        "            variants.append({'type': 'object', 'required': required, 'properties': properties})\n"
+        "        (output / name).write_text(json.dumps({'oneOf': variants}))\n"
+        "    raise SystemExit(0)\n"
+        "if sys.argv[1:3] == ['features', 'list']:\n"
+        "    print('multi_agent_v2  stable  true')\n"
         "    raise SystemExit(0)\n"
         "home = Path(os.environ['CODEX_HOME'])\n"
         "home.mkdir(parents=True, exist_ok=True)\n"
@@ -554,6 +583,11 @@ def write_fake_app_server_smoke_codex(
         "        append_log(f\"stdin:{raw.rstrip()}\")\n"
         "        message = json.loads(raw)\n"
         "        method = message.get('method')\n"
+        "        if str(message.get('id', '')).startswith('parity-probe-'):\n"
+        "            for reply in TYPED_RESPONSES:\n"
+        "                if reply.get('id') == message['id'] or (method == 'turn/start' and 'method' in reply):\n"
+        "                    print(json.dumps(reply), flush=True)\n"
+        "            continue\n"
         "        if method == 'initialize':\n"
         "            print(json.dumps({\n"
         "                'id': message['id'],\n"
@@ -633,129 +667,45 @@ def write_fake_staged_update_helper(
     )
 
 
-def write_fake_internal_update_promotion_driver(path: Path) -> None:
+def write_update_command_observer(path: Path) -> None:
+    """Observe wrapper verification arguments without faking publication or health."""
     write_fake_script(
         path,
-        "#!/usr/bin/env python3\n"
-        "import json\n"
-        "import os\n"
-        "import shutil\n"
-        "import subprocess\n"
-        "import sys\n"
+        f"#!{sys.executable}\n"
+        "import os, subprocess, sys\n"
         "from pathlib import Path\n"
-        "\n"
-        "argv = sys.argv[1:]\n"
-        "real_switcher = Path(os.environ['CODEX_SWITCH_TEST_REAL_SWITCHER'])\n"
-        "delegate_switcher = real_switcher\n"
-        "desktop_driver = os.environ.get('CODEX_SWITCH_TEST_DESKTOP_DRIVER')\n"
-        "uses_official_app = 'split' in argv\n"
-        "if '--app-profile' in argv:\n"
-        "    app_profile = argv[argv.index('--app-profile') + 1]\n"
-        "    uses_official_app = app_profile in {'official', 'openai-official'}\n"
-        "if desktop_driver and uses_official_app:\n"
-        "    delegate_switcher = Path(desktop_driver)\n"
-        "if 'promote-internal-update' not in argv:\n"
-        "    if '--store-dir' in argv and 'verify' in argv and 'internal' in argv:\n"
-        "        verify_log = os.environ.get('CODEX_SWITCH_TEST_VERIFY_ARGS_LOG')\n"
-        "        if verify_log:\n"
-        "            Path(verify_log).write_text(' '.join(argv) + '\\n')\n"
-        "        store = Path(argv[argv.index('--store-dir') + 1])\n"
-        "        marker = store / '.fake-internal-update-parity-verified'\n"
-        "        cli_marker = store / '.fake-internal-update-cli-verified'\n"
-        "        if cli_marker.is_file():\n"
-        "            if '--runtime-smoke' in argv:\n"
-        "                print('Runtime smoke: passed')\n"
-        "            print('Internal App parity: not applicable (App profile: openai-official)')\n"
-        "            print('Verification passed for internal')\n"
-        "            raise SystemExit(0)\n"
-        "        if marker.is_file():\n"
-        "            if '--app-server-smoke' in argv:\n"
-        "                print('App-server smoke: passed')\n"
-        "            if '--runtime-smoke' in argv:\n"
-        "                print('Runtime smoke: passed')\n"
-        "            print('Parity health: healthy')\n"
-        "            print('Verification passed for internal')\n"
-        "            raise SystemExit(0)\n"
-        "    delegate_python = (\n"
-        "        os.environ.get('CODEX_SWITCH_TEST_DELEGATE_PYTHON')\n"
-        "        or os.environ.get('CODEX_SWITCH_PYTHON')\n"
-        "        or sys.executable\n"
-        "    )\n"
-        "    raise SystemExit(subprocess.call([\n"
-        "        delegate_python, '-B', str(delegate_switcher), *argv\n"
-        "    ]))\n"
-        "\n"
-        "promotion_log = os.environ.get('CODEX_SWITCH_TEST_PROMOTION_ARGS_LOG')\n"
-        "if promotion_log:\n"
-        "    Path(promotion_log).write_text(' '.join(argv) + '\\n')\n"
-        "sys.path.insert(0, str(real_switcher.parent))\n"
-        "from codex_switch_update_policy import extract_semantic_version\n"
-        "from codex_switch_verify import run_app_server_smoke\n"
-        "\n"
-        "def option(name):\n"
-        "    index = argv.index(name)\n"
-        "    return argv[index + 1]\n"
-        "\n"
-        "bound = Path(option('--bound-bin'))\n"
-        "candidate = Path(option('--candidate-bin'))\n"
-        "target_version = option('--target-version')\n"
-        "cli_only = '--cli-only' in argv\n"
-        "probe = subprocess.run(\n"
-        "    [str(candidate), '--version'],\n"
-        "    check=False,\n"
-        "    text=True,\n"
-        "    stdout=subprocess.PIPE,\n"
-        "    stderr=subprocess.PIPE,\n"
-        ")\n"
-        "if probe.returncode != 0:\n"
-        "    print(\n"
-        "        f'update-internal: version probe failed (exit {probe.returncode}).',\n"
-        "        file=sys.stderr,\n"
-        "    )\n"
-        "    raise SystemExit(probe.returncode)\n"
-        "observed_version = extract_semantic_version(\n"
-        "    probe.stdout + '\\n' + probe.stderr\n"
-        ")\n"
-        "if observed_version != target_version:\n"
-        "    print(\n"
-        "        'update-internal: failed postcondition; '\n"
-        "        f'expected {target_version} but observed '\n"
-        "        f'{observed_version or \"<unparseable>\"}.',\n"
-        "        file=sys.stderr,\n"
-        "    )\n"
-        "    raise SystemExit(1)\n"
-        "store = Path(option('--store-dir'))\n"
-        "if not cli_only:\n"
-        "    manifest = json.loads(\n"
-        "        (store / 'profiles' / 'internal' / 'manifest.json').read_text()\n"
-        "    )\n"
-        "    internal_home = Path(\n"
-        "        manifest.get('codex_home') or store / 'homes' / 'internal'\n"
-        "    )\n"
-        "    code, output = run_app_server_smoke(str(candidate), internal_home)\n"
-        "    if code != 0:\n"
-        "        print(\n"
-        "            f'update-internal: app-server smoke failed (exit {code}): {output}',\n"
-        "            file=sys.stderr,\n"
-        "        )\n"
-        "        raise SystemExit(code if 0 < code < 256 else 1)\n"
-        "temporary = bound.with_name(f'.{bound.name}.profile-update-{os.getpid()}')\n"
-        "shutil.copy2(candidate, temporary)\n"
-        "os.replace(temporary, bound)\n"
-        "marker_name = (\n"
-        "    '.fake-internal-update-cli-verified'\n"
-        "    if cli_only\n"
-        "    else '.fake-internal-update-parity-verified'\n"
-        ")\n"
-        "(store / marker_name).write_text(\n"
-        "    target_version + '\\n'\n"
-        ")\n"
-        "print(f'update-internal: verified installed version {target_version}.')\n"
-        "if cli_only:\n"
-        "    print('update-internal: CLI generation verified; internal App readiness is unverified.')\n"
-        "else:\n"
-        "    print('App-server smoke: passed')\n"
-        "    print('update-internal: capability and parity receipts verified.')\n",
+        "args = sys.argv[1:]\n"
+        "log = os.environ.get('CODEX_SWITCH_TEST_VERIFY_ARGS_LOG')\n"
+        "if log and 'verify' in args and 'internal' in args:\n"
+        "    Path(log).write_text(' '.join(args) + '\\n')\n"
+        "driver = os.environ['CODEX_SWITCH_TEST_DESKTOP_DRIVER']\n"
+        "python = os.environ.get('CODEX_SWITCH_TEST_DELEGATE_PYTHON', sys.executable)\n"
+        "raise SystemExit(subprocess.call([python, '-B', driver, *args]))\n",
+    )
+
+
+def write_update_python_launcher(path: Path, *, delegate_python: str, applications: Path) -> None:
+    """Redirect only platform discovery while retaining the real shared engine."""
+    write_fake_script(
+        path,
+        f"#!{sys.executable}\n"
+        "import functools, os, runpy, sys\n"
+        "from pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "entry = next((i for i, value in enumerate(args) "
+        "if value.endswith('/codex_switch_update.py')), None)\n"
+        "if entry is None:\n"
+        f"    os.execv({delegate_python!r}, [{delegate_python!r}, *args])\n"
+        "script = args[entry]\n"
+        "sys.path.insert(0, str(Path(script).parent))\n"
+        "import codex_switch_runtime_binding as binding\n"
+        f"apps = Path({str(applications)!r})\n"
+        "roots = binding.DesktopRoots(apps / 'ChatGPT.app', "
+        "apps / 'Codex.app', apps / 'ChatGPT Classic.app')\n"
+        "binding.discover_desktop_hosts = functools.partial("
+        "binding.discover_desktop_hosts, roots=roots)\n"
+        "sys.argv = [script, *args[entry + 1:]]\n"
+        "runpy.run_path(script, run_name='__main__')\n",
     )
 
 
@@ -852,7 +802,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
 
     def make_workspace(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
         temp_dir = tempfile.TemporaryDirectory()
-        root = Path(temp_dir.name)
+        root = Path(temp_dir.name).resolve()
         (root / "live").mkdir()
         (root / "live" / "config.toml").write_text(
             'profile = "internal"\n\n[profiles.internal]\n'
@@ -1351,6 +1301,17 @@ class CodexProfileSwitchTests(unittest.TestCase):
             and "CODEX_SWITCH_SKIP_SHELL_BOOTSTRAP" not in clean_env
         ):
             clean_env["CODEX_SWITCH_SKIP_SHELL_BOOTSTRAP"] = "1"
+        desktop_fixture = clean_env.get("CODEX_SWITCH_TEST_CHATGPT_APP")
+        if desktop_fixture:
+            delegate_python = clean_env.get("CODEX_SWITCH_PYTHON") or sys.executable
+            launcher = root / "update-fixture-python"
+            write_update_python_launcher(
+                launcher,
+                delegate_python=delegate_python,
+                applications=Path(desktop_fixture).parent,
+            )
+            clean_env.setdefault("CODEX_SWITCH_TEST_DELEGATE_PYTHON", delegate_python)
+            clean_env["CODEX_SWITCH_PYTHON"] = str(launcher)
         return subprocess.run(
             command,
             check=check,
@@ -1361,16 +1322,51 @@ class CodexProfileSwitchTests(unittest.TestCase):
             cwd=cwd,
         )
 
-    def enable_fake_internal_update_promotion(
+    def enable_staged_internal_update_fixture(
         self,
         root: Path,
         env: dict[str, str],
     ) -> Path:
-        driver = root / "fake-internal-update-promotion.py"
-        write_fake_internal_update_promotion_driver(driver)
+        driver = root / "update-command-observer.py"
+        write_update_command_observer(driver)
+        official = Path(env["CODEX_SWITCH_TEST_CHATGPT_APP"]) / "Contents/Resources/codex"
+        write_fake_app_server_smoke_codex(official, version="codex-cli 1.0.0")
+        catalog = root / "fixture-models.json"
+        catalog.write_text('{"models":[{"slug":"fixture-model"}]}\n')
+        (root / "live/config.toml").write_text(
+            'model = "fixture-model"\nmodel_provider = "fixture"\n'
+            f'model_catalog_json = {json.dumps(str(catalog))}\n'
+            '[model_providers.fixture]\nname = "Local fixture"\n'
+            'base_url = "http://127.0.0.1:9/v1"\nwire_api = "responses"\n'
+        )
         env["CODEX_SWITCH_SCRIPT"] = str(driver)
         env["CODEX_SWITCH_TEST_REAL_SWITCHER"] = str(SCRIPT)
+        env["CODEX_SWITCH_TEST_APP_SERVER_LOG"] = str(root / "update-app-server.log")
         return driver
+
+    def assert_update_scope(
+        self, root: Path, env: dict[str, str], scope: str
+    ) -> dict[str, object]:
+        records = list((root / "store/updates").glob("*/record.json"))
+        self.assertEqual(1, len(records))
+        update_id = records[0].parent.name
+        result = self.run_wrapper(root, "update-internal", "status", update_id, "--json", env=env)
+        record = json.loads(result.stdout)
+        self.assertEqual("applied", record["state"])
+        self.assertEqual(scope, record["scope"])
+        return record
+
+    def assert_update_smoke_log(self, env: dict[str, str]) -> None:
+        methods = {
+            json.loads(line.removeprefix("stdin:"))["method"]
+            for line in Path(env["CODEX_SWITCH_TEST_APP_SERVER_LOG"]).read_text().splitlines()
+            if line.startswith("stdin:")
+        }
+        self.assertTrue(
+            {"plugin/list", "collaborationMode/list", "thread/start", "turn/start", "thread/read"}
+            <= methods,
+            methods,
+        )
 
     def assert_staged_update_helper_args(
         self,
@@ -1415,7 +1411,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 handle,
             )
         write_fake_codex(internal, "internal-codex")
-        write_fake_codex(official, "official-codex")
+        write_fake_codex(official, "official-codex", version="1.0.0")
         write_fake_script(official_main, "#!/usr/bin/env sh\nexit 0\n")
         (path_dir / "codex").symlink_to(internal)
         desktop_driver = root / "desktop-inventory-driver.py"
@@ -10420,7 +10416,6 @@ class CodexProfileSwitchTests(unittest.TestCase):
             fake_tools = root / "fake-tools"
             fake_tools.mkdir()
             update_args = root / "update-args.txt"
-            promotion_args = root / "promotion-args.txt"
             verify_args = root / "verify-args.txt"
             write_fake_script(
                 fake_tools / "curl",
@@ -10437,9 +10432,8 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            env["CODEX_SWITCH_TEST_PROMOTION_ARGS_LOG"] = str(promotion_args)
             env["CODEX_SWITCH_TEST_VERIFY_ARGS_LOG"] = str(verify_args)
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -10472,7 +10466,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 "Auto-update: running staged CLI-only internal promotion",
                 output,
             )
-            self.assertIn("--cli-only", shlex.split(promotion_args.read_text()))
+            self.assert_update_scope(root, env, "cli-only")
             verification_argv = shlex.split(verify_args.read_text())
             self.assertIn("--runtime-smoke", verification_argv)
             self.assertNotIn("--app-server-smoke", verification_argv)
@@ -10502,7 +10496,6 @@ class CodexProfileSwitchTests(unittest.TestCase):
             fake_tools = root / "fake-tools"
             fake_tools.mkdir()
             update_args = root / "update-args.txt"
-            promotion_args = root / "promotion-args.txt"
             write_fake_staged_update_helper(
                 fake_tools / "codex-env-setup",
                 candidate_source=updated_codex,
@@ -10510,8 +10503,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            env["CODEX_SWITCH_TEST_PROMOTION_ARGS_LOG"] = str(promotion_args)
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -10538,10 +10530,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
 
             output = result.stdout + result.stderr
             self.assertEqual(0, result.returncode, output)
-            self.assertNotIn(
-                "--cli-only",
-                shlex.split(promotion_args.read_text()),
-            )
+            self.assert_update_scope(root, env, "full")
             self.assertIn(
                 "update-internal: capability and parity receipts verified.",
                 output,
@@ -10805,7 +10794,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             env["CODEX_SWITCH_INTERNAL_LATEST_URL"] = (
                 "https://internal.example/latest"
             )
@@ -11110,7 +11099,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -11181,7 +11170,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -11350,7 +11339,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -11414,7 +11403,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -11608,7 +11597,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -11961,7 +11950,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12029,7 +12018,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12092,7 +12081,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12108,6 +12097,8 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 ),
             )
 
+            bound_before = internal_codex.read_bytes()
+            profiles_before = filesystem_snapshot(root / "store/profiles")
             result = self.run_wrapper(
                 root,
                 "update-internal",
@@ -12120,8 +12111,11 @@ class CodexProfileSwitchTests(unittest.TestCase):
 
             output = result.stdout + result.stderr
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("app-server smoke failed", output)
+            self.assertIn("compatibility smoke failed", output)
             self.assertIn("exit 241", output)
+            self.assertEqual(bound_before, internal_codex.read_bytes())
+            self.assertEqual(profiles_before, filesystem_snapshot(root / "store/profiles"))
+            self.assertNotIn("Restart required", output)
 
     def test_internal_update_runs_compatibility_when_switch_apply_fails(
         self,
@@ -12165,7 +12159,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 "args = sys.argv[1:]\n"
                 "script_index = 1 if args[:1] == ['-B'] else 0\n"
                 "if len(args) > script_index "
-                "and Path(args[script_index]).name == 'codex_profile_switch.py' "
+                "and Path(args[script_index]).name in {'codex_profile_switch.py', 'desktop-inventory-driver.py'} "
                 "and 'switch' in args and '--dry-run' not in args:\n"
                 "    raise SystemExit(43)\n"
                 "raise SystemExit(subprocess.call(["
@@ -12179,7 +12173,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 or shutil.which("python3.11")
                 or sys.executable
             )
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12206,15 +12200,9 @@ class CodexProfileSwitchTests(unittest.TestCase):
             output = result.stdout + result.stderr
             self.assertEqual(43, result.returncode)
             self.assertIn("App-server smoke: passed", output)
-            self.assertTrue(
-                (
-                    root
-                    / "store"
-                    / "homes"
-                    / "internal"
-                    / "app-server-smoke.log"
-                ).exists()
-            )
+            self.assert_update_smoke_log(env)
+            record = self.assert_update_scope(root, env, "full")
+            self.assertEqual("1.1.0", record["actual_version"])
 
     def test_internal_update_adapter_preserves_full_semver_tokens(self) -> None:
         temp_dir, root = self.make_workspace()
@@ -12290,7 +12278,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12369,7 +12357,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 "args = sys.argv[1:]\n"
                 "script_index = 1 if args[:1] == ['-B'] else 0\n"
                 "if len(args) > script_index "
-                "and Path(args[script_index]).name == 'codex_profile_switch.py' "
+                "and Path(args[script_index]).name in {'codex_profile_switch.py', 'desktop-inventory-driver.py'} "
                 "and 'repair-plugins' in args:\n"
                 "    raise SystemExit(41)\n"
                 "raise SystemExit(subprocess.call(["
@@ -12383,7 +12371,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 or shutil.which("python3.11")
                 or sys.executable
             )
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12409,15 +12397,9 @@ class CodexProfileSwitchTests(unittest.TestCase):
             output = result.stdout + result.stderr
             self.assertEqual(41, result.returncode)
             self.assertIn("App-server smoke: passed", output)
-            self.assertTrue(
-                (
-                    root
-                    / "store"
-                    / "homes"
-                    / "internal"
-                    / "app-server-smoke.log"
-                ).exists()
-            )
+            self.assert_update_smoke_log(env)
+            record = self.assert_update_scope(root, env, "full")
+            self.assertEqual("1.1.0", record["actual_version"])
 
     def test_one_key_internal_auto_update_runs_app_server_smoke(self) -> None:
         temp_dir, root = self.make_workspace()
@@ -12450,7 +12432,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12494,8 +12476,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 bound_bin=internal_codex,
                 version="9.9.9",
             )
-            smoke_log = root / "store" / "homes" / "internal" / "app-server-smoke.log"
-            self.assertTrue(smoke_log.exists())
+            self.assert_update_smoke_log(env)
             active = json.loads((root / "store" / "active.json").read_text())
             self.assertEqual(active["profile"], "internal")
 
@@ -12766,7 +12747,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12909,7 +12890,7 @@ class CodexProfileSwitchTests(unittest.TestCase):
             )
             env["PATH"] = f"{fake_tools}{os.pathsep}{env.get('PATH', '')}"
             env["CODEX_SWITCH_ENV_SETUP"] = str(fake_tools / "codex-env-setup")
-            self.enable_fake_internal_update_promotion(root, env)
+            self.enable_staged_internal_update_fixture(root, env)
             self.run_switcher(
                 root,
                 "init",
@@ -12925,6 +12906,8 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 ),
             )
 
+            bound_before = internal_codex.read_bytes()
+            profiles_before = filesystem_snapshot(root / "store/profiles")
             result = self.run_wrapper(
                 root,
                 "internal",
@@ -12944,8 +12927,11 @@ class CodexProfileSwitchTests(unittest.TestCase):
                 bound_bin=internal_codex,
                 version="1.1.0",
             )
-            self.assertIn("app-server smoke failed", output)
+            self.assertIn("compatibility smoke failed", output)
             self.assertIn("exit 241", output)
+            self.assertEqual(bound_before, internal_codex.read_bytes())
+            self.assertEqual(profiles_before, filesystem_snapshot(root / "store/profiles"))
+            self.assertNotIn("Restart required", output)
             self.assertNotIn("Auto-update: completed", output)
 
     def test_parse_running_processes_ignores_headers_and_bad_lines(self) -> None:

@@ -1,5 +1,36 @@
 # Task Ledger
 
+## Active Change: Staged Internal Update
+
+- Approved complete target: generic persistent `update-internal stage/apply/status/cancel`,
+  private final-home capture and parity, transactional full/first apply, durable
+  recovery/idempotence, source identity across managed recapture and preserved
+  one-shot/strict bootstrap behavior. Baseline `956197209b2d`.
+- Canonical execution source: `openspec/changes/support-staged-internal-update/tasks.md`.
+  This ledger records authority/history, not a duplicate task queue.
+- Native design and three delta specs contain Target State, completion/Goal
+  contract, bounded write set, slices, tests, rollback and automatic continuation.
+  Evidence: `.planning/devflow/verification/support-staged-internal-update.md`.
+- Execution policy: auto-until-terminal. Main owns implementation/integration and
+  final canonical artifacts. This planning handoff is not an overall stop gate.
+- Standing authority: implement, isolated tests, commit/push existing PR branch.
+  Excluded: live installation/config/Desktop/provider changes, release, archive,
+  destructive cleanup, new dependency or unrelated workflow expansion.
+- Status: implementation and independent Spec/Standards review complete;
+  review findings repaired with RED/GREEN evidence. Fresh frozen regression,
+  exact-commit package/installed verification and existing-PR delivery remain.
+  Continue through those checks using the active OpenSpec task list.
+- Previous `respect-custom-model-catalog` and other completed repairs remain
+  archived. Preserve existing local verification roots and untracked research.
+
+### Staged Update Incidental Finding Register
+
+| ID | Classification | Evidence and current mitigation | Authority / follow-up |
+|---|---|---|---|
+| STAGED-WORKFLOW-GUIDANCE-2026-09-23 | DEFER_AND_CONTINUE | Baseline workflow validator warns AGENTS lacks the Project-Directed Implementation Readiness heading. This change selects no external provider and records `implementation_readiness.required: false`; behavior and apply checks remain valid. | Unrelated workflow refresh is not authorized by this change. |
+| STAGED-OPEN-SPEC-CLI-2026-09-23 | CONTINUE_WITH_MINIMAL_GUARD | Global CLI is 1.3.1; native generated skills target 1.7.0. Reuse the existing retained isolated 1.7.0 executable for instructions/validation without modifying cache or global tooling. | Read-only tooling selection is within scope; no install or dependency change. |
+
+
 ## Completed Cache-Free Correction: Custom Model Catalog Parity
 
 - Reopened again on 2026-09-21 after a missing-cache update failure. Section 5
@@ -718,6 +749,7 @@ record for the bounded local observation.
 
 | id | finding | disposition | reason / residual risk | follow-up |
 |---|---|---|---|---|
+| INC-029 | Release-target skill evaluation counts the complete bundled runtime/tests as excessive deferred input and flags long transaction/test functions | DEFER_AND_CONTINUE | Existing release layout scored 68/100 and the staged candidate 63/100 before shortening new guidance. Keeping runtime integrity and regression coverage takes priority over a package-layout refactor in this update; long publication functions remain a review cost mitigated by failure-injection tests | Dedicated skill/runtime packaging and function-boundary refactor; preserve release manifest and isolated lifecycle contracts |
 | INC-028 | Historical migration fixture retained the first-install helper after removing its update-policy dependency | CONTINUE_WITH_MINIMAL_GUARD | Test-only removal restores the old-version layout; both installer/runner subcases pass on recheck | Resolved in custom-catalog repair; production behavior unchanged |
 | INC-001 | arbitrary profile name containment | DEFER_AND_CONTINUE | user confirms only official/internal product profiles; unsupported legacy paths remain less hardened | revisit only if custom profiles become product scope |
 | INC-002 | snapshot plus `--shared-config-base` semantics | DEFER_AND_CONTINUE | not needed by approved product paths; silent reinterpretation is forbidden | separate behavior decision if requested |

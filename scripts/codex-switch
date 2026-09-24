@@ -1759,7 +1759,7 @@ run_env_setup() {
   fi
   if [[ "${1:-}" == "update-internal" ]]; then
     shift
-    run_update_internal_env_setup "$env_setup" full "$@"
+    run_update_internal_env_setup "$env_setup" auto "$@"
     return
   fi
   "$env_setup" "$@"
@@ -2221,6 +2221,81 @@ run_first_internal_install() {
     -- ${UPDATE_INTERNAL_FORWARD_ARGS[@]+"${UPDATE_INTERNAL_FORWARD_ARGS[@]}"}
 }
 
+run_public_staged_update() {
+  local action="$1" helper selected="" latest_url latest_tag profile_manifest
+  shift
+  resolve_python_bin
+  helper="$(env_setup_command)" || return $?
+  if [[ "$action" == stage ]]; then
+    local item current=0 help=0
+    for item in "$@"; do
+      [[ "$item" != --current ]] || current=1
+      [[ "$item" != --help && "$item" != -h ]] || help=1
+    done
+    if [[ "$current" == 0 && "$help" == 0 ]] && ! update_internal_args_have_version "$@"; then
+      profile_manifest="$(profile_manifest_path internal)" || return $?
+      if [[ -f "$profile_manifest" ]]; then
+        check_internal_update >&2 || return $?
+        if [[ "$INTERNAL_UPDATE_UNCERTAIN" == 1 ]]; then
+          echo "update-internal: no safe automatic target; verify and specify --version." >&2
+          return 1
+        fi
+        if [[ "$INTERNAL_UPDATE_NEEDED" == 1 ]]; then
+          set -- "$@" --version "$INTERNAL_UPDATE_TARGET_VERSION"
+        else
+          set -- "$@" --current
+        fi
+      else
+        latest_url="${CODEX_SWITCH_INTERNAL_LATEST_URL:-${CODEX_INTERNAL_LATEST_URL:-https://github.com/SDGLBL/codex/releases/latest}}"
+        local previous=""
+        for item in "$@"; do
+          [[ "$previous" != --latest-url ]] || latest_url="$item"
+          [[ "$item" != --latest-url=* ]] || latest_url="${item#*=}"
+          previous="$item"
+        done
+        latest_tag="$(latest_internal_tag_from_url "$latest_url")" || return $?
+        selected="$("$PYTHON_BIN" -I -B -c 'import sys; sys.path.insert(0, sys.argv[1]); from codex_switch_first_install import first_version; print(first_version(*sys.argv[2:]))' \
+          "$SCRIPT_DIR" "$latest_tag" "$(internal_blocked_versions)" "$(internal_fallback_version)")" || return $?
+        set -- "$@" --version "$selected"
+      fi
+    fi
+  fi
+  exec "$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_update.py" \
+    ${GLOBAL_ARGS[@]+"${GLOBAL_ARGS[@]}"} --helper "$helper" "$action" "$@"
+}
+
+run_update_engine_and_wait() {
+  # Automatic update returns to the switch workflow, so it cannot exec. Forward
+  # cancellation and wait for the engine to finish its bounded recovery first.
+  local update_child="" update_status update_signal=""
+  local saved_hup saved_int saved_term
+  saved_hup="$(trap -p HUP)"
+  saved_int="$(trap -p INT)"
+  saved_term="$(trap -p TERM)"
+  trap 'update_signal=HUP; if [[ -n "$update_child" ]]; then trap "" HUP INT TERM; kill -TERM "$update_child" 2>/dev/null || true; fi' HUP
+  trap 'update_signal=INT; if [[ -n "$update_child" ]]; then trap "" HUP INT TERM; kill -TERM "$update_child" 2>/dev/null || true; fi' INT
+  trap 'update_signal=TERM; if [[ -n "$update_child" ]]; then trap "" HUP INT TERM; kill -TERM "$update_child" 2>/dev/null || true; fi' TERM
+  "$@" &
+  update_child=$!
+  if [[ -n "$update_signal" ]]; then
+    trap "" HUP INT TERM
+    # Background Bash children initially ignore INT; TERM cancels even before
+    # Python installs its handlers. Preserve the caller's exit status below.
+    kill -TERM "$update_child" 2>/dev/null || true
+  fi
+  if wait "$update_child"; then update_status=0; else update_status=$?; fi
+  if [[ -n "$update_signal" ]]; then
+    if wait "$update_child"; then update_status=0; else update_status=$?; fi
+    # A cancelled automatic update must never continue to profile switching.
+    case "$update_signal" in HUP) update_status=129;; INT) update_status=130;; TERM) update_status=143;; esac
+  fi
+  trap - HUP INT TERM
+  [[ -z "$saved_hup" ]] || eval "$saved_hup"
+  [[ -z "$saved_int" ]] || eval "$saved_int"
+  [[ -z "$saved_term" ]] || eval "$saved_term"
+  return "$update_status"
+}
+
 run_update_internal_env_setup() {
   local env_setup="$1"
   shift
@@ -2233,7 +2308,7 @@ run_update_internal_env_setup() {
   local candidate_dir="" candidate_bin="" backup_bin=""
   local helper_args=()
   case "$promotion_scope" in
-    full|cli-only) ;;
+    full|cli-only|auto) ;;
     *)
       echo "update-internal: invalid promotion scope: $promotion_scope" >&2
       return 2
@@ -2345,6 +2420,16 @@ run_update_internal_env_setup() {
     --internal-bin "$codex_bin"
     --install-dir "$candidate_dir"
   )
+
+  if ! update_internal_args_have_dry_run "$@"; then
+    resolve_python_bin
+    run_update_engine_and_wait "$PYTHON_BIN" -I -B "$SCRIPT_DIR/codex_switch_update.py" \
+      ${GLOBAL_ARGS[@]+"${GLOBAL_ARGS[@]}"} --helper "$env_setup" _one-shot \
+      --scope "$promotion_scope" --version "$target_version" \
+      --internal-bin "$codex_bin" --install-dir "$(dirname "$codex_bin")" \
+      ${UPDATE_INTERNAL_FORWARD_ARGS[@]+"${UPDATE_INTERNAL_FORWARD_ARGS[@]}"}
+    return $?
+  fi
 
   if "$env_setup" update-internal "${helper_args[@]}"; then
     helper_status=0
@@ -2933,7 +3018,12 @@ case "$cmd" in
     check_update "$@"
     ;;
   update-internal)
-    run_env_setup update-internal "$@"
+    case "${1:-}" in
+      stage|apply|status|cancel)
+        run_public_staged_update "$@"
+        ;;
+      *) run_env_setup update-internal "$@" ;;
+    esac
     ;;
   check-internal)
     run_env_setup check-internal "$@"

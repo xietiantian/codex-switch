@@ -43,6 +43,7 @@ codex-switch official
 codex-switch restore <backup-id> --dry-run
 codex-switch check-update
 codex-switch update-internal --dry-run
+codex-switch update-internal stage --version 1.2.3 --json
 codex-switch env check-internal
 ```
 
@@ -83,8 +84,11 @@ not run an internal app-server smoke or require the official App to exit.
 Before commit, promotion renders a private copy of the real internal shim and
 executes its `--version` path; failure restores the previous binary and manifest.
 Final split smoke separately executes the actual post-switch store shim.
-Direct `codex-switch update-internal` remains the explicit full Desktop-parity
-update path. An explicit custom model catalog is provider-owned: a matching
+Direct `codex-switch update-internal` uses full Desktop parity when Desktop is
+available or the internal App is already bound. When neither Desktop nor an
+internal App binding exists, it can update only the CLI, leaving App readiness
+unverified. Explicit staged `apply` always requires Desktop parity. An explicit
+custom model catalog is provider-owned: a matching
 official model name does not imply matching capabilities. This path does not
 read or require the official `models_cache.json`; its receipt records official
 model comparison as not applicable. Catalog integrity, original-source
@@ -271,7 +275,25 @@ codex-switch --skip-self-update verify internal --responses-tool-smoke --report
 
 ### Internal parity and staged updates
 
-This section applies when the App owner is `internal`. In the supported
+To prepare a runtime before finalizing configuration, use the durable update
+commands. Replace `UPDATE_ID` with the ID returned by stage:
+
+```bash
+codex-switch update-internal stage --version 1.2.3 --json
+codex-switch update-internal apply UPDATE_ID --from-codex-home /path/to/final-home --json
+codex-switch update-internal status UPDATE_ID --json
+codex-switch update-internal cancel UPDATE_ID --json
+```
+
+Stage returns a complete runtime without changing the selected profile or bound
+command. Use `stage --current` to reuse a verified runtime without reinstalling.
+Apply captures final config/auth privately and requires the actual verified
+Desktop reference before transactional publication. Identical repeated apply
+returns the confirmed result; changed inputs require a new ID. See
+[staged internal updates](docs/staged-internal-updates.md) for first setup,
+JSON fields, retained runtime ownership and interrupted-update recovery.
+
+The parity checks below apply when the App owner is `internal`. In the supported
 internal-CLI/official-App split, status, Doctor, and verify continue checking
 the internal CLI and official App bindings but print
 `Internal App parity: not applicable (App profile: openai-official)` instead of
@@ -329,7 +351,8 @@ reviewing the findings, an explicit
 through the same staged `set-bin internal <current-backend>` rebind; it does not
 patch the receipt, overlay, config, launcher, or manifest in place.
 
-After changing configuration and recapturing `internal`, run
+For an existing capture-based workflow, after changing configuration and
+recapturing `internal`, run
 `set-bin internal <current-backend>` before activating the internal Desktop
 profile. Capture replaces the profile snapshot; a fresh rebind validates that
 snapshot and regenerates its receipts, even when the binary path is unchanged.
@@ -347,13 +370,16 @@ With no internal profile and no command at the selected install target,
 `update-internal` performs a first installation. It validates a private candidate
 and publishes the command without overwriting another installation. Existing
 commands, dangling links, partial profiles, and leftover backups are not treated
-as fresh installs. Configure Codex and run `init --capture-current internal`
-after installation; this path does not create a profile, change configuration,
+as fresh installs. After installation, configure a final home and use
+`stage --current` followed by `apply --from-codex-home` when Desktop is available.
+Existing workflows can still use `init --capture-current internal`. The
+bootstrap itself does not create a profile, change configuration,
 activate Desktop, or claim Desktop compatibility. `--dry-run` previews this
 path without filesystem changes. An explicit `--version` works without release
 discovery; otherwise a valid latest release or policy fallback is required.
 
-For an existing profile, `update-internal` installs and probes a candidate in a private sibling directory
+For an existing profile requiring full Desktop parity, `update-internal`
+installs and probes a candidate in a private sibling directory
 while the bound binary remains available. It validates parity before replacing
 the bound path, promotes the binary and runtime bundle through one recoverable
 journal, and retains the old binary backup until version, binding, app-server,

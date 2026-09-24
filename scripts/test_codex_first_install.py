@@ -2,6 +2,7 @@
 """First-install regressions at the public codex-switch command boundary."""
 
 import os
+import hashlib
 import json
 import signal
 from pathlib import Path
@@ -294,6 +295,177 @@ else:
         result = self.run_install()
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(self.target.is_file())
+        self.assertNotIn('First installation complete', result.stdout)
+
+    def inject_receipt_fault(self, code):
+        shim = self.fake_bin / "python-receipt-fault"
+        self.write(shim, '#!' + sys.executable + '\n' + f'''
+import json, os, runpy, signal, stat, sys
+from pathlib import Path
+for index, value in enumerate(sys.argv[1:], 1):
+    if value.endswith('/codex_switch_first_install.py'):
+        receipt_path = Path(os.environ['TEST_STORE']) / '.internal-cli-bootstrap.json'
+        exec({code!r})
+        sys.argv = sys.argv[index:]
+        runpy.run_path(value, run_name='__main__')
+        break
+else:
+    os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])
+''')
+        self.env['CODEX_SWITCH_PYTHON'] = str(shim)
+
+    def assert_failed_receipt_can_retry(self, result, exit_code=1):
+        self.assertEqual(exit_code, result.returncode, result.stdout + result.stderr)
+        self.assertFalse(os.path.lexists(self.target))
+        self.assertFalse((self.store / '.internal-cli-bootstrap.json').exists())
+        self.assertEqual([], list(self.store.iterdir()))
+        self.assertNotIn('First installation complete', result.stdout)
+        self.env['CODEX_SWITCH_PYTHON'] = sys.executable
+        retry = self.run_install()
+        self.assertEqual(0, retry.returncode, retry.stdout + retry.stderr)
+        receipt_path = self.store / '.internal-cli-bootstrap.json'
+        receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(0o600, receipt_path.stat().st_mode & 0o777)
+        self.assertEqual('2.0.0', receipt['version'])
+        self.assertEqual(str(self.target.resolve()), receipt['target_path'])
+        self.assertEqual(hashlib.sha256(self.target.read_bytes()).hexdigest(), receipt['sha256'])
+        self.assertFalse((self.store / 'profiles/internal').exists())
+
+    def test_receipt_write_failure_restores_absence_and_allows_retry(self):
+        self.inject_receipt_fault('''
+def failing_dump(value, stream, **kwargs):
+    stream.write('{"schema_version":')
+    stream.flush()
+    raise OSError('injected receipt write failure')
+json.dump = failing_dump
+''')
+        self.assert_failed_receipt_can_retry(self.run_install())
+
+    def test_receipt_flush_failure_restores_absence_and_allows_retry(self):
+        self.inject_receipt_fault('''
+original_fdopen = os.fdopen
+class FailingFlush:
+    def __init__(self, stream):
+        self.stream = stream
+    def __enter__(self):
+        self.stream.__enter__()
+        return self
+    def __exit__(self, *args):
+        return self.stream.__exit__(*args)
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+    def flush(self):
+        self.stream.flush()
+        raise OSError('injected receipt flush failure')
+def fdopen(fd, mode='r', *args, **kwargs):
+    stream = original_fdopen(fd, mode, *args, **kwargs)
+    return FailingFlush(stream) if mode == 'w' else stream
+os.fdopen = fdopen
+''')
+        self.assert_failed_receipt_can_retry(self.run_install())
+
+    def test_receipt_file_fsync_failure_restores_absence_and_allows_retry(self):
+        self.inject_receipt_fault('''
+original_fsync = os.fsync
+def fsync(fd):
+    info = os.fstat(fd)
+    if stat.S_ISREG(info.st_mode) and not info.st_mode & 0o111:
+        raise OSError('injected receipt file fsync failure')
+    original_fsync(fd)
+os.fsync = fsync
+''')
+        self.assert_failed_receipt_can_retry(self.run_install())
+
+    def test_receipt_directory_fsync_failure_restores_absence_and_allows_retry(self):
+        self.inject_receipt_fault('''
+original_fsync = os.fsync
+def fsync(fd):
+    info = os.fstat(fd)
+    if receipt_path.parent.exists():
+        store = receipt_path.parent.stat()
+        if (info.st_dev, info.st_ino) == (store.st_dev, store.st_ino):
+            raise OSError('injected receipt directory fsync failure')
+    original_fsync(fd)
+os.fsync = fsync
+''')
+        self.assert_failed_receipt_can_retry(self.run_install())
+
+    def test_signal_after_receipt_creation_cleans_owned_state_and_allows_retry(self):
+        self.inject_receipt_fault('''
+original_open = os.open
+def open_file(path, flags, *args, **kwargs):
+    fd = original_open(path, flags, *args, **kwargs)
+    if str(path).startswith('.internal-cli-bootstrap-') and flags & os.O_CREAT:
+        os.kill(os.getpid(), signal.SIGTERM)
+    return fd
+os.open = open_file
+''')
+        self.assert_failed_receipt_can_retry(self.run_install(), exit_code=143)
+
+    def test_signal_after_receipt_publication_cleans_owned_state_and_allows_retry(self):
+        self.inject_receipt_fault('''
+original_link = os.link
+def link(source, target, **kwargs):
+    original_link(source, target, **kwargs)
+    if target == '.internal-cli-bootstrap.json':
+        os.kill(os.getpid(), signal.SIGTERM)
+os.link = link
+''')
+        self.assert_failed_receipt_can_retry(self.run_install(), exit_code=143)
+
+    def test_receipt_is_not_visible_until_complete_json_is_published(self):
+        self.inject_receipt_fault('''
+original_dump = json.dump
+def dump(value, stream, **kwargs):
+    assert not receipt_path.exists(), 'partial receipt became visible'
+    original_dump(value, stream, **kwargs)
+    stream.flush()
+    assert not receipt_path.exists(), 'unsynced receipt became visible'
+json.dump = dump
+''')
+        result = self.run_install()
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        receipt = json.loads((self.store / '.internal-cli-bootstrap.json').read_text())
+        self.assertEqual('2.0.0', receipt['version'])
+        self.assertEqual(['.internal-cli-bootstrap.json'], [path.name for path in self.store.iterdir()])
+
+    def test_receipt_fsync_failure_preserves_concurrent_equal_content_replacement(self):
+        self.inject_receipt_fault('''
+original_fsync = os.fsync
+def fsync(fd):
+    info = os.fstat(fd)
+    if receipt_path.exists():
+        store = receipt_path.parent.stat()
+        if (info.st_dev, info.st_ino) == (store.st_dev, store.st_ino):
+            replacement = receipt_path.with_suffix('.replacement')
+            replacement.write_bytes(receipt_path.read_bytes())
+            replacement.chmod(0o600)
+            os.replace(replacement, receipt_path)
+            raise OSError('injected receipt replacement during fsync')
+    original_fsync(fd)
+os.fsync = fsync
+''')
+        result = self.run_install()
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertFalse(os.path.lexists(self.target))
+        receipt = json.loads((self.store / '.internal-cli-bootstrap.json').read_text())
+        self.assertEqual('2.0.0', receipt['version'])
+        self.assertNotIn('First installation complete', result.stdout)
+
+    def test_receipt_eexist_preserves_concurrent_equal_hard_link(self):
+        self.inject_receipt_fault('''
+original_link = os.link
+def link(source, target, **kwargs):
+    original_link(source, target, **kwargs)
+    if target == '.internal-cli-bootstrap.json':
+        raise FileExistsError('concurrent receipt publisher')
+os.link = link
+''')
+        result = self.run_install()
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertFalse(os.path.lexists(self.target))
+        receipt = json.loads((self.store / '.internal-cli-bootstrap.json').read_text())
+        self.assertEqual('2.0.0', receipt['version'])
         self.assertNotIn('First installation complete', result.stdout)
 
 

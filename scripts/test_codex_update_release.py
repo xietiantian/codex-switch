@@ -7,6 +7,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import plistlib
+import shlex
 import shutil
 import signal
 import stat
@@ -72,6 +74,7 @@ REQUIRED_PATHS = [
     "scripts/codex_switch_home_sync.py",
     "scripts/codex_switch_selection.py",
     "scripts/codex_switch_shared_configuration.py",
+    "scripts/codex_switch_update.py",
     "scripts/package-release.sh",
     MANIFEST_NAME,
 ]
@@ -87,6 +90,7 @@ REQUIRED_PYTHON_MODULES = [
     "codex_switch_home_sync.py",
     "codex_switch_selection.py",
     "codex_switch_shared_configuration.py",
+    "codex_switch_update.py",
 ]
 EXECUTABLE_EXPECTATIONS = {
     "run.sh": "0755",
@@ -207,6 +211,7 @@ def write_required_python_modules(scripts_dir: Path) -> None:
     )
     (scripts_dir / PROFILE_SWITCH_MODULE_PATH.name).write_text("VALUE = 1\n")
     for name in (
+        "codex_switch_update.py",
         "codex_switch_parity.py",
         "codex_switch_runtime_binding.py",
         "codex_switch_app_proxy.py",
@@ -5008,7 +5013,7 @@ class CodexInternalUpdatePolicyTests(unittest.TestCase):
 class CodexStagedInternalUpdateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp_dir.name)
+        self.root = Path(self.temp_dir.name).resolve()
         self.home = self.root / "home"
         self.home.mkdir()
         self.install_root = self.root / "internal-bin"
@@ -5074,6 +5079,7 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
                 "PYTHONDONTWRITEBYTECODE": "1",
             }
         )
+        self._isolate_update_desktop(present=True)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -5082,6 +5088,45 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
         path.chmod(0o755)
+
+    def _isolate_update_desktop(self, *, present: bool) -> None:
+        """Substitute only platform App roots; execute the real update engine."""
+        applications = self.root / ("applications" if present else "no-applications")
+        if present:
+            bundle = applications / "ChatGPT.app"
+            self._write_script(bundle / "Contents/MacOS/ChatGPT", "#!/bin/sh\nexit 0\n")
+            self._write_script(
+                bundle / "Contents/Resources/codex",
+                '#!/bin/sh\nprintf "codex-cli 1.0.0\\n"\n',
+            )
+            (bundle / "Contents/Info.plist").write_bytes(
+                plistlib.dumps({"CFBundleIdentifier": "com.openai.codex"})
+            )
+        real_python = getattr(self, "fixture_python", self.base_env["CODEX_SWITCH_PYTHON"])
+        self.fixture_python = real_python
+        shim = self.root / "isolated-update-python"
+        self._write_script(
+            shim,
+            f"#!{real_python}\n"
+            "import functools, os, runpy, sys\n"
+            "from pathlib import Path\n"
+            "args = sys.argv[1:]\n"
+            "entry = next((i for i, value in enumerate(args) "
+            "if value.endswith('/codex_switch_update.py')), None)\n"
+            "if entry is None:\n"
+            f"    os.execv({real_python!r}, [{real_python!r}, *args])\n"
+            "script = args[entry]\n"
+            "sys.path.insert(0, str(Path(script).parent))\n"
+            "import codex_switch_runtime_binding as binding\n"
+            f"apps = Path({str(applications)!r})\n"
+            "roots = binding.DesktopRoots(apps / 'ChatGPT.app', "
+            "apps / 'Codex.app', apps / 'ChatGPT Classic.app')\n"
+            "binding.discover_desktop_hosts = functools.partial("
+            "binding.discover_desktop_hosts, roots=roots)\n"
+            "sys.argv = [script, *args[entry + 1:]]\n"
+            "runpy.run_path(script, run_name='__main__')\n",
+        )
+        self.base_env["CODEX_SWITCH_PYTHON"] = str(shim)
 
     def _bound_snapshot(self) -> tuple[bytes, int]:
         return self.bound_bin.read_bytes(), stat.S_IMODE(self.bound_bin.stat().st_mode)
@@ -5103,16 +5148,16 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
             "#!/usr/bin/env bash\n"
             "set -euo pipefail\n"
             + (
-                "cmp \"$CODEX_TEST_BOUND_BIN\" \"$CODEX_TEST_BOUND_COPY\"\n"
+                f"cmp {shlex.quote(str(self.bound_bin))} {shlex.quote(str(self.bound_copy))}\n"
                 if candidate_checks_bound
                 else ""
             )
             +
             "printf 'candidate-probe:%s\\n' \"$*\" "
-            ">> \"$CODEX_TEST_EVENTS\"\n"
+            f">> {shlex.quote(str(self.events))}\n"
             'if [[ "${1:-}" == "--version" ]]; then\n'
             '  if [[ "${CODEX_TEST_REQUIRE_SIGNED:-0}" == "1" '
-            '&& ! -f "$CODEX_TEST_SIGNED_MARKER" ]]; then\n'
+            f"&& ! -f {shlex.quote(str(self.signed_marker))} ]]; then\n"
             "    exit 29\n"
             "  fi\n"
             f"  printf 'codex-cli {version}\\n'\n"
@@ -5252,6 +5297,14 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
         profile_dir.mkdir(parents=True)
         internal_home = store / "homes" / "internal"
         internal_home.mkdir(parents=True)
+        (profile_dir / "config.toml").write_text(
+            'model = "example-model"\n'
+            'model_provider = "example"\n'
+            '[model_providers.example]\n'
+            'name = "Example"\n'
+            'base_url = "http://127.0.0.1:9/v1"\n'
+            'wire_api = "responses"\n'
+        )
         (profile_dir / "manifest.json").write_text(
             json.dumps(
                 {
@@ -5302,111 +5355,6 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
             }
         )
         return helper, helper_log
-
-    def _write_locked_promotion_driver(self) -> tuple[Path, Path]:
-        driver = self.root / "locked-promotion-driver.py"
-        trace = self.root / "locked-promotion-trace.jsonl"
-        driver.write_text(
-            "#!/usr/bin/env python3\n"
-            "import fcntl\n"
-            "import hashlib\n"
-            "import json\n"
-            "import os\n"
-            "import subprocess\n"
-            "import sys\n"
-            "from pathlib import Path\n"
-            "\n"
-            "argv = sys.argv[1:]\n"
-            "trace = Path(os.environ['CODEX_TEST_PROMOTION_TRACE'])\n"
-            "\n"
-            "def append(record):\n"
-            "    with trace.open('a') as handle:\n"
-            "        handle.write(json.dumps(record, sort_keys=True) + '\\n')\n"
-            "\n"
-            "def option(name):\n"
-            "    index = argv.index(name)\n"
-            "    return argv[index + 1]\n"
-            "\n"
-            "if 'promote-internal-update' not in argv:\n"
-            "    append({'event': 'unexpected-command', 'argv': argv})\n"
-            "    raise SystemExit(97)\n"
-            "\n"
-            "store = Path(option('--store-dir'))\n"
-            "bound = Path(option('--bound-bin'))\n"
-            "candidate = Path(option('--candidate-bin'))\n"
-            "backup = Path(option('--backup-bin'))\n"
-            "target_version = option('--target-version')\n"
-            "observed_version = subprocess.check_output(\n"
-            "    [str(candidate), '--version'],\n"
-            "    text=True,\n"
-            ").strip()\n"
-            "if target_version not in observed_version:\n"
-            "    raise SystemExit(96)\n"
-            "\n"
-            "artifact_root = candidate.parent / 'runtime-artifacts'\n"
-            "artifact_root.mkdir(mode=0o700)\n"
-            "artifacts = {\n"
-            "    'capability_receipt': artifact_root / 'capability-receipt.json',\n"
-            "    'parity_receipt': artifact_root / 'parity-receipt.json',\n"
-            "    'parity_overlay': artifact_root / 'model-catalog.json',\n"
-            "    'profile_config': artifact_root / 'profile-config.toml',\n"
-            "    'shared_config': artifact_root / 'shared-config.toml',\n"
-            "    'active_runtime_config': artifact_root / 'runtime-config.toml',\n"
-            "    'launcher': artifact_root / 'codex-internal-app',\n"
-            "    'manifest': artifact_root / 'manifest.json',\n"
-            "}\n"
-            "for role, path in artifacts.items():\n"
-            "    path.write_text(role + ':' + str(candidate) + '\\n')\n"
-            "\n"
-            "fingerprint_paths = {\n"
-            "    key: Path(value)\n"
-            "    for key, value in json.loads(\n"
-            "        os.environ['CODEX_TEST_FINGERPRINT_PATHS']\n"
-            "    ).items()\n"
-            "}\n"
-            "fingerprint_paths['candidate_binary'] = candidate\n"
-            "fingerprint_paths['capability_receipt'] = artifacts[\n"
-            "    'capability_receipt'\n"
-            "]\n"
-            "\n"
-            "def digest(path):\n"
-            "    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
-            "\n"
-            "prepared = {\n"
-            "    label: digest(path)\n"
-            "    for label, path in sorted(fingerprint_paths.items())\n"
-            "}\n"
-            "append({\n"
-            "    'event': 'prepare',\n"
-            "    'bound_bin': str(bound),\n"
-            "    'candidate_bin': str(candidate),\n"
-            "    'backup_bin': str(backup),\n"
-            "    'artifact_roles': sorted(artifacts),\n"
-            "})\n"
-            "\n"
-            "descriptor = os.open(store, os.O_RDONLY)\n"
-            "try:\n"
-            "    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
-            "    append({'event': 'lock', 'store': str(store)})\n"
-            "    observed = {\n"
-            "        label: digest(path)\n"
-            "        for label, path in sorted(fingerprint_paths.items())\n"
-            "    }\n"
-            "    append({\n"
-            "        'event': 'revalidate',\n"
-            "        'fingerprints': sorted(observed),\n"
-            "        'stable': observed == prepared,\n"
-            "    })\n"
-            "    if observed != prepared:\n"
-            "        raise SystemExit(74)\n"
-            "finally:\n"
-            "    fcntl.flock(descriptor, fcntl.LOCK_UN)\n"
-            "    os.close(descriptor)\n"
-            "\n"
-            "raise SystemExit(int(os.environ.get('CODEX_TEST_PROMOTION_EXIT', '73')))\n"
-        )
-        driver.chmod(0o755)
-        return driver, trace
 
     def test_env_setup_stages_private_sibling_and_preserves_bound_inputs(
         self,
@@ -6105,141 +6053,122 @@ class CodexStagedInternalUpdateTests(unittest.TestCase):
         self.assertEqual(before, self._bound_snapshot())
         self.assertNotIn("verified installed version", output)
 
-    def test_wrapper_delegates_complete_candidate_bundle_with_locked_revalidation(
-        self,
-    ) -> None:
+    def test_wrapper_staged_engine_rejects_profile_drift_before_promotion(self) -> None:
         store = self._write_internal_manifest()
-        profile_dir = store / "profiles" / "internal"
-        profile_config = profile_dir / "config.toml"
-        profile_config.write_text(
-            'model = "gpt-internal-staged"\n'
-            'model_provider = "azure"\n'
-        )
-        shared_config = self.root / "shared-config.toml"
-        shared_config.write_text("[agents]\nmax_threads = 4\n")
-        active_runtime_config = store / "homes" / "internal" / "config.toml"
-        active_runtime_config.write_text('profile = "internal"\n')
-        source_catalog = self.root / "source-catalog.json"
-        source_catalog.write_text(
-            '{"models":[{"slug":"gpt-internal-staged"}]}\n'
-        )
-        official_reference = self.root / "official-reference-codex"
-        official_reference.write_bytes(b"official-reference\n")
+        profile_config = store / "profiles/internal/config.toml"
         candidate_source = self.root / "candidate-source"
         self._write_script(
             candidate_source,
-            "#!/usr/bin/env bash\n"
-            'printf \'candidate-probe:%s\\n\' "$*" >> "$CODEX_TEST_EVENTS"\n'
-            'if [[ "${1:-}" == "--version" ]]; then\n'
-            "  printf 'codex-cli 1.0.0\\n'\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 23\n",
+            '#!/bin/sh\nprintf "codex-cli 2.0.0\\n"\n',
         )
-        _helper, helper_log = self._write_staged_wrapper_helper(
-            candidate_source
-        )
-        driver, trace = self._write_locked_promotion_driver()
+        helper, helper_log = self._write_staged_wrapper_helper(candidate_source)
+        with helper.open("a") as stream:
+            stream.write('printf "# changed concurrently\\n" >> "$CODEX_TEST_CONFIG"\n')
         before = self._bound_snapshot()
-        env = self.base_env.copy()
-        env.update(
-            {
-                "CODEX_SWITCH_SCRIPT": str(driver),
-                "CODEX_SWITCH_SKIP_SELF_UPDATE": "1",
-                "CODEX_TEST_PROMOTION_TRACE": str(trace),
-                "CODEX_TEST_PROMOTION_EXIT": "73",
-                "CODEX_TEST_FINGERPRINT_PATHS": json.dumps(
-                    {
-                        "active_runtime_config": str(active_runtime_config),
-                        "bound_binary": str(self.bound_bin),
-                        "internal_manifest": str(
-                            profile_dir / "manifest.json"
-                        ),
-                        "official_reference": str(official_reference),
-                        "profile_config": str(profile_config),
-                        "shared_config": str(shared_config),
-                        "source_catalog": str(source_catalog),
-                    },
-                    sort_keys=True,
-                ),
-            }
-        )
-
+        config_before = profile_config.read_bytes()
+        env = {**self.base_env, "CODEX_TEST_CONFIG": str(profile_config)}
         result = subprocess.run(
-            [
-                str(WRAPPER),
-                "--skip-self-update",
-                "--store-dir",
-                str(store),
-                "update-internal",
-                "--version",
-                "1.0.0",
-            ],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
+            [str(WRAPPER), "--skip-self-update", "--store-dir", str(store),
+             "update-internal", "--version", "2.0.0"],
+            env=env, text=True, capture_output=True, timeout=30,
         )
-
         output = result.stdout + result.stderr
-        self.assertEqual(73, result.returncode, output)
-        helper_record = json.loads(helper_log.read_text())
-        candidate_dir = Path(helper_record["candidate_dir"])
-        candidate_bin = candidate_dir / "codex"
+        self.assertNotEqual(0, result.returncode, output)
+        self.assertIn("changed", output.lower())
+        candidate_dir = Path(json.loads(helper_log.read_text())["candidate_dir"])
         self.assertEqual(self.install_root, candidate_dir.parent)
-        self.assertNotEqual(self.install_root, candidate_dir)
         self.assertEqual(0o700, stat.S_IMODE(candidate_dir.stat().st_mode))
-        records = [
-            json.loads(line)
-            for line in trace.read_text().splitlines()
-            if line.strip()
-        ]
-        self.assertEqual(
-            ["prepare", "lock", "revalidate"],
-            [record["event"] for record in records],
-        )
-        self.assertEqual(str(self.bound_bin), records[0]["bound_bin"])
-        self.assertEqual(str(candidate_bin), records[0]["candidate_bin"])
-        self.assertEqual(
-            self.install_root,
-            Path(records[0]["backup_bin"]).parent,
-        )
-        self.assertEqual(
-            {
-                "active_runtime_config",
-                "capability_receipt",
-                "launcher",
-                "manifest",
-                "parity_overlay",
-                "parity_receipt",
-                "profile_config",
-                "shared_config",
-            },
-            set(records[0]["artifact_roles"]),
-        )
-        self.assertEqual(
-            {
-                "active_runtime_config",
-                "bound_binary",
-                "candidate_binary",
-                "capability_receipt",
-                "internal_manifest",
-                "official_reference",
-                "profile_config",
-                "shared_config",
-                "source_catalog",
-            },
-            set(records[2]["fingerprints"]),
-        )
-        self.assertTrue(records[2]["stable"])
-        events = self.events.read_text().splitlines()
-        self.assertFalse(
-            any(event.startswith("bound-probe:") for event in events),
-            events,
-        )
+        self.assertTrue((candidate_dir / "codex").is_file())
         self.assertEqual(before, self._bound_snapshot())
+        self.assertEqual(config_before + b"# changed concurrently\n", profile_config.read_bytes())
+        self.assertFalse((store / ".runtime-binding-rebind.json").exists())
+        records = list((store / "updates").glob("*/record.json"))
+        self.assertEqual(1, len(records))
+        record = json.loads(records[0].read_text())
+        status = subprocess.run(
+            [str(WRAPPER), "--skip-self-update", "--store-dir", str(store),
+             "update-internal", "status", record["update_id"], "--json"],
+            env=env, text=True, capture_output=True, timeout=30,
+        )
+        self.assertEqual(0, status.returncode, status.stdout + status.stderr)
+        self.assertEqual("stale", json.loads(status.stdout)["state"])
+        self.assertNotIn("Restart required", output)
         self.assertNotIn("verified installed version", output)
+        events = self.events.read_text().splitlines() if self.events.exists() else []
+        self.assertFalse(any(event.startswith("bound-probe:") for event in events), events)
+
+    def test_one_shot_preserves_installer_failure_exit_status(self) -> None:
+        store = self._write_internal_manifest()
+        self._write_installer(exit_status=17)
+        before = self._bound_snapshot()
+        profile_before = filesystem_snapshot(store / "profiles")
+        result = subprocess.run(
+            [str(WRAPPER), "--skip-self-update", "--store-dir", str(store),
+             "update-internal", "--version", "2.0.0", "--skip-source-check", "--skip-proxy"],
+            env=self.base_env, text=True, capture_output=True, timeout=30,
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(17, result.returncode, output)
+        self.assertEqual(before, self._bound_snapshot())
+        self.assertEqual(profile_before, filesystem_snapshot(store / "profiles"))
+        self.assertNotIn("Restart required", output)
+        self.assertNotIn("verified installed version", output)
+
+    def test_one_shot_without_desktop_commits_only_verified_cli_generation(self) -> None:
+        self._isolate_update_desktop(present=False)
+        store = self._write_internal_manifest()
+        config = store / "profiles/internal/config.toml"
+        config_before = config.read_bytes()
+        candidate_source = self.root / "candidate-source"
+        self._write_script(candidate_source, '#!/bin/sh\nprintf "codex-cli 2.0.0\\n"\n')
+        self._write_staged_wrapper_helper(candidate_source)
+        result = subprocess.run(
+            [str(WRAPPER), "--skip-self-update", "--store-dir", str(store),
+             "--official-codex-home", str(self.root / "official-home"),
+             "--internal-codex-home", str(store / "homes/internal"),
+             "--launch-agent-path", str(self.root / "agent.plist"),
+             "update-internal", "--version", "2.0.0"],
+            env=self.base_env, text=True, capture_output=True, timeout=30,
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, output)
+        self.assertEqual(candidate_source.read_bytes(), self.bound_bin.read_bytes())
+        manifest = json.loads((store / "profiles/internal/manifest.json").read_text())
+        self.assertEqual("2.0.0", manifest["internal_cli_generation"]["backend_version"])
+        self.assertEqual(sha256(self.bound_bin), manifest["internal_cli_generation"]["backend_sha256"])
+        self.assertEqual("unverified", manifest["internal_app_readiness"])
+        self.assertEqual(config_before, config.read_bytes())
+        self.assertFalse((self.root / "agent.plist").exists())
+        records = list((store / "updates").glob("*/record.json"))
+        self.assertEqual(1, len(records))
+        record = json.loads(records[0].read_text())
+        self.assertEqual("applied", record["state"])
+        self.assertEqual("cli-only", record["scope"])
+        self.assertEqual(candidate_source.read_bytes(), Path(record["runtime_path"]).read_bytes())
+        self.assertNotIn("Restart required", output)
+
+    def test_one_shot_without_desktop_cannot_bypass_existing_internal_app_binding(self) -> None:
+        self._isolate_update_desktop(present=False)
+        store = self._write_internal_manifest()
+        (store / "active.json").write_text(json.dumps({"profile": "internal"}))
+        candidate_source = self.root / "candidate-source"
+        self._write_script(candidate_source, '#!/bin/sh\nprintf "codex-cli 2.0.0\\n"\n')
+        self._write_staged_wrapper_helper(candidate_source)
+        before = self._bound_snapshot()
+        profile_before = filesystem_snapshot(store / "profiles")
+        active_before = (store / "active.json").read_bytes()
+        result = subprocess.run(
+            [str(WRAPPER), "--skip-self-update", "--store-dir", str(store),
+             "update-internal", "--version", "2.0.0"],
+            env=self.base_env, text=True, capture_output=True, timeout=30,
+        )
+        output = result.stdout + result.stderr
+        self.assertNotEqual(0, result.returncode, output)
+        self.assertIn("Desktop reference", output)
+        self.assertEqual(before, self._bound_snapshot())
+        self.assertEqual(profile_before, filesystem_snapshot(store / "profiles"))
+        self.assertEqual(active_before, (store / "active.json").read_bytes())
+        self.assertNotIn("Restart required", output)
 
     def test_cli_only_promotion_commits_digest_bound_manifest_without_desktop_artifacts(
         self,
@@ -6623,7 +6552,6 @@ class CodexInstallerRunnerAdapterTests(unittest.TestCase):
     def _promote(self, candidate_root: Path, layout_root: Path, label: str) -> None:
         candidate = self.promotion_module.validate_candidate(
             candidate_root,
-            smoke_timeout=1.0,
             import_timeout=1.0,
         )
         self.promotion_module.promote_candidate(
@@ -7429,6 +7357,43 @@ class CodexInstallerRunnerAdapterTests(unittest.TestCase):
             )["required_paths"],
         )
         self.assertTrue((install_dir / "codex-switch").is_symlink())
+
+    def test_installer_upgrades_prior_package_without_staged_update_module(self) -> None:
+        _, archive = self._build_candidate("prior-update-module-upgrade", "2.0.0")
+        added_module = "scripts/codex_switch_update.py"
+        for layout_kind in ("canonical", "legacy"):
+            with self.subTest(layout=layout_kind):
+                layout_root = self.root / f"prior-update-module-{layout_kind}"
+                prior_release = layout_root / "current"
+                self._write_source(prior_release, "1.0.0")
+                (prior_release / added_module).unlink()
+                manifest = self.bundle_module._create_manifest(prior_release, "1.0.0")
+                manifest["required_paths"].remove(added_module)
+                (prior_release / MANIFEST_NAME).write_text(
+                    json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+                )
+                if layout_kind == "canonical":
+                    releases = layout_root / "releases"
+                    releases.mkdir()
+                    prior_release.rename(releases / manifest["payload_sha256"])
+                    prior_release.symlink_to(Path("releases") / manifest["payload_sha256"])
+                prior_snapshot = filesystem_snapshot(prior_release.resolve())
+                result = self._run_entrypoint(
+                    INSTALLER, archive, layout_root,
+                    self.root / f"prior-update-module-{layout_kind}-bin", (),
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                current = (layout_root / "current").resolve()
+                self.assertEqual("2.0.0", (current / "VERSION").read_text().strip())
+                self.assertTrue((current / added_module).is_file())
+                self.assertEqual(
+                    REQUIRED_PATHS,
+                    json.loads((current / MANIFEST_NAME).read_text())["required_paths"],
+                )
+                self.assertEqual(
+                    prior_snapshot, filesystem_snapshot((layout_root / "rollback").resolve()),
+                )
+                self.assertFalse((layout_root / "rollback" / added_module).exists())
 
     def test_runner_preserves_signal_exit_status_after_promotion(self) -> None:
         _, archive = self._build_candidate(

@@ -8,18 +8,77 @@ import queue
 import signal
 import stat
 import subprocess
+import sys
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, Union
+from typing import Callable, Iterator, Mapping, Sequence, Union
 
 from codex_switch_constants import SwitchError
 
 
 JsonPath = tuple[str, ...]
 JsonRpcId = Union[str, int]
+
+
+@contextmanager
+def defer_probe_cleanup_signals() -> Iterator[None]:
+    """Finish bounded cleanup before delivering a cancellation signal.
+
+    A second signal must not replace an exception already being unwound. For
+    ordinary cleanup, deliver the first deferred signal to its original handler
+    after cleanup, so cancellation is never lost in a successful return path.
+    Python only dispatches signal handlers on the main thread.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    unwinding = sys.exc_info()[0] is not None
+    pending: list[tuple[int, object]] = []
+    previous = {}
+
+    def defer(signum: int, frame: object) -> None:
+        if not pending:
+            pending.append((signum, frame))
+
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, defer)
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if pending and not unwinding and sys.exc_info()[0] is None:
+            signum, frame = pending[0]
+            handler = previous[signum]
+            if callable(handler):
+                handler(signum, frame)
+            elif handler == signal.SIG_DFL:
+                os.kill(os.getpid(), signum)
+
+
+@contextmanager
+def managed_probe_process(
+    process: subprocess.Popen,
+    *,
+    threads: Sequence[threading.Thread] = (),
+    terminate: Callable[[subprocess.Popen], object] | None = None,
+) -> Iterator[None]:
+    """Own a probe session through every exit, including BaseException exits."""
+    try:
+        yield
+    finally:
+        with defer_probe_cleanup_signals():
+            (terminate or _terminate_probe_process)(process)
+            deadline = time.monotonic() + 0.5
+            for thread in threads:
+                if thread.ident is not None:
+                    thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            _close_probe_streams(process)
+
 
 CONFIG_WRITE_METHODS = frozenset(
     {"config/value/write", "config/batchWrite"}
@@ -890,7 +949,12 @@ def generate_app_server_schema(
     with tempfile.TemporaryDirectory(
         prefix="codex-switch-schema-probe-"
     ) as temp_dir:
-        schema_root = Path(temp_dir)
+        schema_root = Path(temp_dir).resolve()
+        environment = os.environ.copy()
+        environment.update({
+            "HOME": str(schema_root), "CODEX_HOME": str(schema_root),
+            "XDG_CONFIG_HOME": str(schema_root / ".config"),
+        })
         try:
             process = subprocess.Popen(
                 [
@@ -904,11 +968,13 @@ def generate_app_server_schema(
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                cwd=schema_root,
+                env=environment,
                 start_new_session=True,
             )
         except OSError as exc:
             raise SwitchError("App-server schema generation failed") from exc
-        try:
+        with managed_probe_process(process):
             try:
                 process.communicate(timeout=timeout_seconds)
             except subprocess.TimeoutExpired as exc:
@@ -916,9 +982,6 @@ def generate_app_server_schema(
             if process.returncode != 0:
                 raise SwitchError("App-server schema generation failed")
             return _generated_schema_payload(schema_root)
-        finally:
-            _terminate_probe_process(process)
-            _close_probe_streams(process)
 
 
 def _write_probe_message(
@@ -1009,6 +1072,8 @@ def _terminate_probe_process(process: subprocess.Popen[object]) -> None:
             process.stdin.close()
         except OSError:
             pass
+    if process.poll() is not None and not _process_group_exists(process.pid):
+        return
     if process.poll() is None:
         try:
             process.wait(timeout=0.2)
@@ -1096,12 +1161,15 @@ def probe_config_write_capability(
     if timeout_seconds <= 0:
         return None
     with tempfile.TemporaryDirectory(prefix="codex-switch-config-probe-") as temp_dir:
-        home = Path(temp_dir)
+        home = Path(temp_dir).resolve()
         config_path = home / "config.toml"
         config_path.write_text(CONFIG_WRITE_PROBE_SEED)
         config_path.chmod(0o600)
         environment = os.environ.copy()
-        environment["CODEX_HOME"] = str(home)
+        environment.update({
+            "HOME": str(home), "CODEX_HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+        })
         try:
             process = subprocess.Popen(
                 [
@@ -1114,25 +1182,28 @@ def probe_config_write_capability(
                 stderr=subprocess.PIPE,
                 text=True,
                 env=environment,
+                cwd=home,
                 start_new_session=True,
             )
         except OSError:
             return None
-        output: queue.Queue[str] = queue.Queue(maxsize=64)
-        stdout_thread = threading.Thread(
-            target=_read_probe_lines,
-            args=(process.stdout, output),
-            daemon=True,
-        )
-        stderr_thread = threading.Thread(
-            target=_discard_probe_output,
-            args=(process.stderr,),
-            daemon=True,
-        )
-        stdout_thread.start()
-        stderr_thread.start()
-        deadline = time.monotonic() + timeout_seconds
-        try:
+        threads: list[threading.Thread] = []
+        with managed_probe_process(process, threads=threads):
+            output: queue.Queue[str] = queue.Queue(maxsize=64)
+            stdout_thread = threading.Thread(
+                target=_read_probe_lines,
+                args=(process.stdout, output),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=_discard_probe_output,
+                args=(process.stderr,),
+                daemon=True,
+            )
+            threads.extend((stdout_thread, stderr_thread))
+            stdout_thread.start()
+            stderr_thread.start()
+            deadline = time.monotonic() + timeout_seconds
             if not _write_probe_message(
                 process,
                 {
@@ -1218,11 +1289,6 @@ def probe_config_write_capability(
             if verify_outcome is not True:
                 return verify_outcome
             return _probe_config_preserves_unrelated(config_path)
-        finally:
-            _terminate_probe_process(process)
-            stdout_thread.join(timeout=0.2)
-            stderr_thread.join(timeout=0.2)
-            _close_probe_streams(process)
 
 
 @dataclass(frozen=True)

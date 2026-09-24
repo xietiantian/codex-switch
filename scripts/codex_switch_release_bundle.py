@@ -60,6 +60,7 @@ REQUIRED_PYTHON_MODULES = (
     "codex_switch_home_sync.py",
     "codex_switch_selection.py",
     "codex_switch_shared_configuration.py",
+    "codex_switch_update.py",
 )
 SUPPORTED_HISTORICAL_REQUIRED_PATHS = (
     "README.md",
@@ -104,6 +105,12 @@ IMMEDIATELY_PREVIOUS_REQUIRED_PATHS = (
 SUPPORTED_HISTORICAL_REQUIRED_PATH_SETS = (
     SUPPORTED_HISTORICAL_REQUIRED_PATHS,
     IMMEDIATELY_PREVIOUS_REQUIRED_PATHS,
+    (
+        "README.md", "SKILL.md", "VERSION", "run.sh", "agents", "docs",
+        "evals", "scripts", "scripts/codex-switch",
+        *(f"scripts/{name}" for name in REQUIRED_PYTHON_MODULES if name != "codex_switch_update.py"),
+        "scripts/package-release.sh", MANIFEST_NAME,
+    ),
 )
 REQUIRED_PATHS = (
     "README.md",

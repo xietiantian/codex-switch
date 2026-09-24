@@ -26,7 +26,10 @@ command automatically runs `codex-switch update-internal` when it detects that
 the internal profile's bound CLI is older than the latest internal release.
 The `split` preset performs the same ordered detection but promotes the selected
 binary as a digest-bound CLI-only generation; it does not claim internal App
-compatibility. Direct `update-internal` retains the full Desktop-parity path.
+compatibility. Direct `update-internal` uses full Desktop parity when Desktop
+is available or an internal App binding already exists. With neither, it can
+update the CLI while leaving App readiness unverified. Explicit staged apply
+always requires full Desktop parity.
 Normal official/internal update checks additionally show a non-blocking
 comparison with the latest stable `openai/codex` release. That advisory never
 selects an internal install target, and prereleases are not the default
@@ -63,6 +66,7 @@ scripts/codex-switch sync-shared
 scripts/codex-switch official
 scripts/codex-switch check-update
 scripts/codex-switch update-internal --dry-run
+scripts/codex-switch update-internal stage --version 1.2.3 --json
 ```
 
 If the skill has been installed into `$CODEX_HOME/skills` and the wrapper has
@@ -230,6 +234,19 @@ python3 scripts/codex_profile_switch.py switch openai-official --dry-run
    This remains read-only, prints `codex-switch update-internal` when the
    internal release source selects an update, and reports the selected
    profile's relationship to the latest stable `openai/codex` release.
+
+## Durable Internal Updates
+
+Use `update-internal stage --version VERSION --json` (or `--current`), then
+`update-internal apply ID --from-codex-home PRIVATE_DIR --json`. Keep formal
+config/auth unchanged until apply; configuration generation and auxiliary-file
+recovery belong to the caller. Do not insert capture or set-bin in this flow.
+
+Read [staged internal updates](docs/staged-internal-updates.md) before using this
+interface for JSON fields, bootstrap/current adoption, actual Desktop reference,
+custom/default source provenance, replay and recovery. On interruption query
+`update-internal status ID --json`; use cancel only for owned unfinished work.
+A confirmed commit is historical evidence, not current Desktop health.
 
 ## Internal Parity Contract
 

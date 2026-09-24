@@ -1483,6 +1483,8 @@ _RUNTIME_BINDING_BUNDLE_OPTIONAL_ROLES = frozenset(
         "official_manifest",
         "shared_config",
         "active_runtime_config",
+        "profile_auth",
+        "active_runtime_auth",
         "parity_internal_model_source",
         "parity_official_model_source",
     }
@@ -1500,6 +1502,8 @@ _RUNTIME_BINDING_BUNDLE_ACTIVATION_ORDER = (
     "parity_receipt",
     "shared_config",
     "profile_config",
+    "profile_auth",
+    "active_runtime_auth",
     "active_runtime_config",
     "launcher",
     "official_manifest",
@@ -1524,7 +1528,7 @@ _MAX_RUNTIME_REBIND_MARKER_BYTES = (
 class RuntimeBindingTextArtifact:
     role: str
     path: Path
-    payload: bytes
+    payload: bytes | None
     mode: int
 
 
@@ -1533,8 +1537,8 @@ class RuntimeBindingExecutableSwap:
     bound_path: Path
     candidate_path: Path
     backup_path: Path
-    old_mode: int
-    old_sha256: str
+    old_mode: int | None
+    old_sha256: str | None
     new_mode: int
     new_sha256: str
 
@@ -1557,6 +1561,8 @@ def _runtime_binding_bundle_expected_paths(store: Store) -> dict[str, Path]:
         "parity_internal_model_source": parity_dir / "internal-model-source.json",
         "parity_official_model_source": parity_dir / "official-model-source.json",
         "profile_config": profile_dir / "config.toml",
+        "profile_auth": profile_dir / "auth.json",
+        "active_runtime_auth": internal_home / "auth.json",
         "shared_config": homes.official.path / "config.toml",
         "active_runtime_config": internal_home / "config.toml",
     }
@@ -1744,7 +1750,7 @@ def _validated_runtime_binding_bundle_artifacts(
             raise SwitchError("Runtime binding bundle artifact role is invalid")
         if not isinstance(artifact.path, Path) or not artifact.path.is_absolute():
             raise SwitchError("Runtime binding bundle artifact path is invalid")
-        if type(artifact.payload) is not bytes:
+        if type(artifact.payload) is not bytes and not (artifact.payload is None and artifact.role in {"profile_auth", "active_runtime_auth"}):
             raise SwitchError("Runtime binding bundle artifact payload is invalid")
         if type(artifact.mode) is not int:
             raise SwitchError("Runtime binding bundle artifact mode is invalid")
@@ -1780,7 +1786,7 @@ def _validated_runtime_binding_bundle_artifacts(
             raise SwitchError(
                 f"Runtime binding bundle mode is invalid: {artifact.role}"
             )
-        if len(artifact.payload) > _MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES:
+        if artifact.payload is not None and len(artifact.payload) > _MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES:
             raise SwitchError(
                 f"Runtime binding bundle payload is oversized: {artifact.role}"
             )
@@ -1929,14 +1935,8 @@ def _validated_runtime_binding_executable_swap(
         "bound_path": str(bound_path),
         "candidate_path": str(candidate_path),
         "backup_path": str(backup_path),
-        "old_mode": _validate_runtime_binding_executable_mode(
-            executable_swap.old_mode,
-            label="old",
-        ),
-        "old_sha256": _validate_runtime_binding_executable_digest(
-            executable_swap.old_sha256,
-            label="old",
-        ),
+        "old_mode": None if executable_swap.old_mode is None and executable_swap.old_sha256 is None else _validate_runtime_binding_executable_mode(executable_swap.old_mode, label="old"),
+        "old_sha256": None if executable_swap.old_mode is None and executable_swap.old_sha256 is None else _validate_runtime_binding_executable_digest(executable_swap.old_sha256, label="old"),
         "new_mode": _validate_runtime_binding_executable_mode(
             executable_swap.new_mode,
             label="new",
@@ -1986,14 +1986,8 @@ def _validated_runtime_rebind_executable_swap_marker(
         "bound_path": str(paths["bound_path"]),
         "candidate_path": str(paths["candidate_path"]),
         "backup_path": str(paths["backup_path"]),
-        "old_mode": _validate_runtime_binding_executable_mode(
-            raw.get("old_mode"),
-            label="old",
-        ),
-        "old_sha256": _validate_runtime_binding_executable_digest(
-            raw.get("old_sha256"),
-            label="old",
-        ),
+        "old_mode": None if raw.get("old_mode") is None and raw.get("old_sha256") is None else _validate_runtime_binding_executable_mode(raw.get("old_mode"), label="old"),
+        "old_sha256": None if raw.get("old_mode") is None and raw.get("old_sha256") is None else _validate_runtime_binding_executable_digest(raw.get("old_sha256"), label="old"),
         "new_mode": _validate_runtime_binding_executable_mode(
             raw.get("new_mode"),
             label="new",
@@ -2681,8 +2675,7 @@ def _runtime_rebind_executable_swap_expected_states(
     new_mode = executable_swap.get("new_mode")
     new_sha256 = executable_swap.get("new_sha256")
     if (
-        type(old_mode) is not int
-        or not isinstance(old_sha256, str)
+        (not (old_mode is None and old_sha256 is None) and (type(old_mode) is not int or not isinstance(old_sha256, str)))
         or type(new_mode) is not int
         or not isinstance(new_sha256, str)
     ):
@@ -2690,11 +2683,11 @@ def _runtime_rebind_executable_swap_expected_states(
             "Runtime rebind executable swap evidence is invalid"
         )
     return (
-        {
+        ({"kind": "missing"} if old_mode is None else {
             "kind": "file",
             "mode": old_mode,
             "sha256": old_sha256,
-        },
+        }),
         {
             "kind": "file",
             "mode": new_mode,
@@ -2757,7 +2750,7 @@ def _require_runtime_rebind_executable_swap_phase(
             f"Runtime rebind executable swap changed during {phase}"
         ),
     )
-    if observed != expected_phase:
+    if observed != expected_phase and not (executable_swap.get("old_mode") is None and {observed, expected_phase} == {"initial", "old_backed_up"}):
         raise SwitchError(
             "Runtime rebind executable swap phase changed during "
             f"{phase}: expected {expected_phase}, found {observed}"
@@ -2886,7 +2879,7 @@ def _recover_runtime_rebind_executable_swap(
                 phase="prepared executable candidate restoration",
             )
             phase = "old_backed_up"
-        if phase == "old_backed_up":
+        if phase == "old_backed_up" and old_state["kind"] != "missing":
             _require_runtime_rebind_marker_identity(
                 marker_path,
                 marker_identity,
@@ -2901,6 +2894,8 @@ def _recover_runtime_rebind_executable_swap(
             )
         desired_phase = "initial"
     elif marker_state == "committed":
+        if phase == "initial" and old_state["kind"] == "missing":
+            phase = "old_backed_up"
         if phase == "initial":
             _require_runtime_rebind_marker_identity(
                 marker_path,
@@ -2951,6 +2946,10 @@ def _retire_runtime_rebind_executable_backup(
     old_state, _new_state, _missing_state = (
         _runtime_rebind_executable_swap_expected_states(executable_swap)
     )
+    if old_state["kind"] == "missing":
+        if os.path.lexists(backup_path):
+            raise SwitchError("First publication backup unexpectedly exists")
+        return
     try:
         before = backup_path.lstat()
     except OSError as exc:
@@ -3073,7 +3072,7 @@ def _validated_runtime_rebind_bundle_marker(
     base_fields = {"schema_version", "state", "artifacts"}
     marker_fields = set(raw)
     schema_version = raw.get("schema_version")
-    if schema_version == 3:
+    if schema_version == 3 or (schema_version == 5 and "bundle_scope" not in raw):
         bundle_scope = _RUNTIME_BINDING_BUNDLE_SCOPE_FULL
         allowed_marker_fields = (
             base_fields,
@@ -3084,7 +3083,7 @@ def _validated_runtime_rebind_bundle_marker(
             _RUNTIME_BINDING_BUNDLE_REQUIRED_ROLES
             | _RUNTIME_BINDING_BUNDLE_OPTIONAL_ROLES
         )
-    elif schema_version == 4:
+    elif schema_version in {4, 5}:
         bundle_scope = raw.get("bundle_scope")
         if bundle_scope != _RUNTIME_BINDING_BUNDLE_SCOPE_CLI_ONLY:
             raise SwitchError("Runtime rebind bundle marker scope is invalid")
@@ -3097,6 +3096,11 @@ def _validated_runtime_rebind_bundle_marker(
         allowed_roles = _RUNTIME_BINDING_BUNDLE_CLI_ONLY_REQUIRED_ROLES
     else:
         raise SwitchError("Runtime rebind bundle marker schema is invalid")
+    if schema_version == 5:
+        allowed_marker_fields = tuple(fields | {"update", "allow_absent_profile", "directories"} for fields in allowed_marker_fields)
+        _validate_runtime_binding_update_identity(store, raw.get("update"))
+        if type(raw.get("allow_absent_profile")) is not bool:
+            raise SwitchError("Runtime rebind absence contract is invalid")
     if marker_fields not in allowed_marker_fields:
         raise SwitchError("Runtime rebind bundle marker fields are invalid")
     raw_entries = raw.get("artifacts")
@@ -3129,7 +3133,7 @@ def _validated_runtime_rebind_bundle_marker(
                 "old_state": _validated_runtime_rebind_state(
                     raw_entry.get("old_state"),
                     label=f"{role} old state",
-                    allow_missing=role != "manifest",
+                    allow_missing=role != "manifest" or raw.get("allow_absent_profile") is True,
                     max_payload_bytes=(
                         _MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES
                     ),
@@ -3137,7 +3141,7 @@ def _validated_runtime_rebind_bundle_marker(
                 "new_state": _validated_runtime_rebind_state(
                     raw_entry.get("new_state"),
                     label=f"{role} new state",
-                    allow_missing=False,
+                    allow_missing=role in {"profile_auth", "active_runtime_auth"},
                     max_payload_bytes=(
                         _MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES
                     ),
@@ -3179,12 +3183,14 @@ def _validated_runtime_rebind_bundle_marker(
         new_state = entry["new_state"]
         if (
             not isinstance(new_state, dict)
-            or new_state.get("mode")
-            != _runtime_binding_bundle_expected_mode(role)  # type: ignore[arg-type]
+            or (new_state.get("kind") != "missing" and new_state.get("mode")
+            != _runtime_binding_bundle_expected_mode(role))  # type: ignore[arg-type]
         ):
             raise SwitchError(
                 f"Runtime rebind bundle marker mode is invalid: {role}"
             )
+    if schema_version == 5:
+        _validate_runtime_binding_directories(store, raw.get("directories"), paths)
     validated = dict(raw)
     validated["artifacts"] = validated_entries
     if "executable_swap" in raw:
@@ -3230,13 +3236,13 @@ def _validated_runtime_rebind_marker(
     if (
         not isinstance(raw, dict)
         or type(schema_version) is not int
-        or schema_version not in {1, 2, 3, 4}
+        or schema_version not in {1, 2, 3, 4, 5}
     ):
         raise SwitchError("Runtime rebind marker schema is invalid")
     state = raw.get("state")
     if state not in {"prepared", "committed"}:
         raise SwitchError("Runtime rebind marker state is invalid")
-    if raw.get("schema_version") in {3, 4}:
+    if raw.get("schema_version") in {3, 4, 5}:
         return _validated_runtime_rebind_bundle_marker(store, raw)
     expected_manifest = store.manifest_path("internal")
     expected_launcher = store.bin_dir / "codex-internal-app"
@@ -3311,7 +3317,7 @@ def _recover_runtime_binding_rebind(
         store,
         raw_marker,
     )
-    if marker["schema_version"] in {3, 4}:
+    if marker["schema_version"] in {3, 4, 5}:
         raw_entries = marker["artifacts"]
         if not isinstance(raw_entries, list):
             raise SwitchError(
@@ -3325,6 +3331,8 @@ def _recover_runtime_binding_rebind(
             )
             for entry in raw_entries
         ]
+        if marker.get("schema_version") == 5:
+            _require_runtime_binding_directories(store, marker["directories"])
         executable_swap = marker.get("executable_swap")
         if executable_swap is not None:
             if not isinstance(executable_swap, dict):
@@ -3429,6 +3437,10 @@ def _recover_runtime_binding_rebind(
                 ),
                 phase="recovery completion",
             )
+        if marker.get("schema_version") == 5 and marker["state"] == "prepared":
+            _rollback_runtime_binding_directories(store, marker["directories"])
+        if marker.get("update") is not None:
+            _write_runtime_binding_terminal_receipt(store, marker)
         _durable_unlink_runtime_rebind_path(
             marker_path,
             expected_identity=marker_identity,
@@ -3501,6 +3513,174 @@ def _recover_runtime_binding_rebind(
     )
 
 
+def _runtime_binding_missing_directories(paths: tuple[Path, ...]) -> list[dict[str, object]]:
+    missing: set[Path] = set()
+    for target in paths:
+        path = target.parent
+        while not os.path.lexists(path):
+            missing.add(path)
+            path = path.parent
+    return [{"path": str(path), "identity": None} for path in sorted(missing, key=lambda item: (len(item.parts), str(item)))]
+
+
+def _validate_runtime_binding_directories(store: Store, raw: object, targets: list[Path]) -> None:
+    if not isinstance(raw, list):
+        raise SwitchError("Runtime binding directory journal is invalid")
+    seen = set()
+    for entry in raw:
+        if not isinstance(entry, dict) or set(entry) != {"path", "identity"} or not isinstance(entry["path"], str):
+            raise SwitchError("Runtime binding directory journal entry is invalid")
+        path = Path(entry["path"])
+        identity = entry["identity"]
+        if path in seen or not path.is_absolute() or path == store.root or not any(path in target.parents for target in targets):
+            raise SwitchError("Runtime binding directory ownership path is invalid")
+        if identity is not None and (not isinstance(identity, list) or len(identity) != 2 or any(type(value) is not int or value < 0 for value in identity)):
+            raise SwitchError("Runtime binding directory identity is invalid")
+        _validate_runtime_rebind_bundle_target_route(store, path)
+        seen.add(path)
+    if [entry["path"] for entry in raw] != [str(path) for path in sorted(seen, key=lambda item: (len(item.parts), str(item)))]:
+        raise SwitchError("Runtime binding directory journal order is invalid")
+
+
+def _require_runtime_binding_directories(store: Store, directories: list[dict[str, object]]) -> None:
+    for entry in directories:
+        path = Path(entry["path"])
+        _validate_runtime_rebind_bundle_target_route(store, path)
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISDIR(info.st_mode) or [info.st_dev, info.st_ino] != entry["identity"]:
+            raise SwitchError("Runtime binding recovery found foreign directory state")
+
+
+def _rollback_runtime_binding_directories(store: Store, directories: list[dict[str, object]]) -> None:
+    _require_runtime_binding_directories(store, directories)
+    for entry in reversed(directories):
+        path = Path(entry["path"])
+        opened = _open_runtime_rebind_bundle_parent(store, path, create_missing=False)
+        if opened is None:
+            continue
+        descriptor, leaf = opened
+        try:
+            try:
+                info = os.stat(leaf, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISDIR(info.st_mode) or [info.st_dev, info.st_ino] != entry["identity"]:
+                raise SwitchError("Runtime binding rollback found foreign directory state")
+            try:
+                os.rmdir(leaf, dir_fd=descriptor)
+                os.fsync(descriptor)
+            except OSError as exc:
+                raise SwitchError("Runtime binding rollback directory contains foreign state") from exc
+        finally:
+            os.close(descriptor)
+
+
+def runtime_binding_terminal_receipt_path(store: Store, update_id: str) -> Path:
+    if not isinstance(update_id, str) or not update_id or len(update_id) > 128 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in update_id):
+        raise SwitchError("Runtime binding update identity is invalid")
+    return store.root / "runtime-binding-receipts" / (update_id + ".json")
+
+
+def _validate_runtime_binding_update_identity(store: Store, raw: object) -> dict[str, object]:
+    if not isinstance(raw, dict) or set(raw) != {"update_id", "input_fingerprint", "transaction_id", "receipt_path"}:
+        raise SwitchError("Runtime binding update evidence is invalid")
+    path = runtime_binding_terminal_receipt_path(store, raw.get("update_id"))
+    _validate_runtime_binding_executable_digest(raw.get("input_fingerprint"), label="update input")
+    transaction_id = raw.get("transaction_id")
+    if not isinstance(transaction_id, str) or len(transaction_id) != 32 or any(c not in "0123456789abcdef" for c in transaction_id):
+        raise SwitchError("Runtime binding transaction identity is invalid")
+    if raw.get("receipt_path") != str(path):
+        raise SwitchError("Runtime binding terminal receipt destination is invalid")
+    _validate_runtime_rebind_bundle_target_route(store, path)
+    return dict(raw)
+
+
+def read_runtime_binding_terminal_receipt(store: Store, update_id: str, *, input_fingerprint: str | None = None, _from_pending: bool = True) -> dict[str, object] | None:
+    path = runtime_binding_terminal_receipt_path(store, update_id)
+    state = _runtime_rebind_bundle_file_state(store, path, max_payload_bytes=_MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES)
+    if state.get("kind") == "missing":
+        marker_path = _runtime_rebind_marker_path(store)
+        if not _from_pending or not _runtime_rebind_marker_present(marker_path):
+            return None
+        raw, _identity = _read_runtime_rebind_marker(marker_path)
+        marker = _validated_runtime_rebind_marker(store, raw)
+        if marker.get("state") != "committed" or marker.get("update", {}).get("update_id") != update_id:
+            return None
+        receipt = _runtime_binding_terminal_receipt_payload(store, marker)
+        if input_fingerprint is not None and receipt["input_fingerprint"] != input_fingerprint:
+            raise SwitchError("Runtime binding terminal receipt input identity changed")
+        return receipt
+    try:
+        receipt = json.loads(_runtime_rebind_state_payload(state))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SwitchError("Runtime binding terminal receipt is malformed") from exc
+    if not isinstance(receipt, dict) or receipt.get("schema_version") != 1 or receipt.get("state") not in {"committed", "rolled_back"}:
+        raise SwitchError("Runtime binding terminal receipt is invalid")
+    identity = _validate_runtime_binding_update_identity(store, {key: receipt.get(key) for key in ("update_id", "input_fingerprint", "transaction_id", "receipt_path")})
+    if identity["update_id"] != update_id or (input_fingerprint is not None and identity["input_fingerprint"] != input_fingerprint):
+        raise SwitchError("Runtime binding terminal receipt input identity changed")
+    if set(receipt) != {"schema_version", "state", "bundle_scope", "update_id", "input_fingerprint", "transaction_id", "receipt_path", "artifacts"} or state.get("mode") != 0o600:
+        raise SwitchError("Runtime binding terminal receipt fields or mode are invalid")
+    scope = receipt["bundle_scope"]
+    if scope not in {_RUNTIME_BINDING_BUNDLE_SCOPE_FULL, _RUNTIME_BINDING_BUNDLE_SCOPE_CLI_ONLY}:
+        raise SwitchError("Runtime binding terminal receipt scope is invalid")
+    required_roles = (_RUNTIME_BINDING_BUNDLE_CLI_ONLY_REQUIRED_ROLES
+        if scope == _RUNTIME_BINDING_BUNDLE_SCOPE_CLI_ONLY else _RUNTIME_BINDING_BUNDLE_REQUIRED_ROLES)
+    allowed_roles = (required_roles if scope == _RUNTIME_BINDING_BUNDLE_SCOPE_CLI_ONLY
+        else required_roles | _RUNTIME_BINDING_BUNDLE_OPTIONAL_ROLES)
+    artifacts = receipt.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise SwitchError("Runtime binding terminal receipt artifacts are invalid")
+    roles, paths = set(), set()
+    for entry in artifacts:
+        if not isinstance(entry, dict) or set(entry) != {"role", "path", "state"}:
+            raise SwitchError("Runtime binding terminal receipt artifact is invalid")
+        role, raw_path, artifact_state = entry["role"], entry["path"], entry["state"]
+        if not isinstance(role, str) or role not in allowed_roles or role in roles:
+            raise SwitchError("Runtime binding terminal receipt role is invalid")
+        if not isinstance(raw_path, str) or not Path(raw_path).is_absolute() or os.path.normpath(raw_path) != raw_path or raw_path in paths:
+            raise SwitchError("Runtime binding terminal receipt path is invalid")
+        if not isinstance(artifact_state, dict):
+            raise SwitchError("Runtime binding terminal receipt state is invalid")
+        if artifact_state.get("kind") == "missing":
+            if set(artifact_state) != {"kind"} or (receipt["state"] == "committed" and role not in {"profile_auth", "active_runtime_auth"}):
+                raise SwitchError("Runtime binding terminal receipt absence is invalid")
+        elif artifact_state.get("kind") == "file":
+            if set(artifact_state) != {"kind", "mode", "sha256"} or type(artifact_state["mode"]) is not int:
+                raise SwitchError("Runtime binding terminal receipt file state is invalid")
+            _validate_runtime_binding_executable_digest(artifact_state["sha256"], label="terminal receipt artifact")
+            if receipt["state"] == "committed" and artifact_state["mode"] != _runtime_binding_bundle_expected_mode(role):
+                raise SwitchError("Runtime binding terminal receipt file mode is invalid")
+        else:
+            raise SwitchError("Runtime binding terminal receipt state kind is invalid")
+        roles.add(role)
+        paths.add(raw_path)
+    if not required_roles <= roles:
+        raise SwitchError("Runtime binding terminal receipt is missing required artifacts")
+    return receipt
+
+
+def _runtime_binding_terminal_receipt_payload(store: Store, marker: Mapping[str, object]) -> dict[str, object]:
+    update = _validate_runtime_binding_update_identity(store, marker.get("update"))
+    receipt = {"schema_version": 1, **update, "bundle_scope": marker.get("bundle_scope", _RUNTIME_BINDING_BUNDLE_SCOPE_FULL), "state": "committed" if marker["state"] == "committed" else "rolled_back",
+        "artifacts": [{"role": entry["role"], "path": entry["path"], "state": {key: value for key, value in entry["new_state" if marker["state"] == "committed" else "old_state"].items() if key in {"kind", "mode", "sha256"}}} for entry in marker["artifacts"]]}
+    return receipt
+
+
+def _write_runtime_binding_terminal_receipt(store: Store, marker: Mapping[str, object]) -> dict[str, object]:
+    receipt = _runtime_binding_terminal_receipt_payload(store, marker)
+    update = marker["update"]
+    existing = read_runtime_binding_terminal_receipt(store, update["update_id"], input_fingerprint=update["input_fingerprint"], _from_pending=False)
+    if existing is not None and existing != receipt:
+        raise SwitchError("Runtime binding terminal receipt conflicts with transaction")
+    if existing is None:
+        _atomic_write_runtime_rebind_bundle_path(store, Path(update["receipt_path"]), (json.dumps(receipt, sort_keys=True, indent=2) + "\n").encode(), mode=0o600)
+    return receipt
+
+
 def commit_runtime_binding_bundle(
     locked_store: LockedStoreMutation,
     *,
@@ -3511,7 +3691,10 @@ def commit_runtime_binding_bundle(
     retire_executable_backup: bool = False,
     fault_hook: Callable[[str], None] | None = None,
     bundle_scope: str = _RUNTIME_BINDING_BUNDLE_SCOPE_FULL,
-) -> None:
+    allow_absent_profile: bool = False,
+    update_id: str | None = None,
+    input_fingerprint: str | None = None,
+) -> dict[str, object] | None:
     locked_store.revalidate()
     if input_validator is not None and not callable(input_validator):
         raise SwitchError("Runtime binding bundle input validator is invalid")
@@ -3540,6 +3723,17 @@ def commit_runtime_binding_bundle(
             "Runtime binding CLI-only bundle requires an executable swap"
         )
     store = locked_store.store
+    update = None
+    if update_id is not None:
+        update = _validate_runtime_binding_update_identity(store, {
+            "update_id": update_id, "input_fingerprint": input_fingerprint,
+            "transaction_id": uuid.uuid4().hex,
+            "receipt_path": str(runtime_binding_terminal_receipt_path(store, update_id)),
+        })
+        if read_runtime_binding_terminal_receipt(store, update_id, input_fingerprint=input_fingerprint) is not None:
+            raise SwitchError("Runtime binding update already has a terminal receipt")
+    if type(allow_absent_profile) is not bool or (allow_absent_profile and update is None):
+        raise SwitchError("Absent profile publication requires a bound update")
     marker_path = _runtime_rebind_marker_path(store)
     if _runtime_rebind_marker_present(marker_path):
         raise SwitchError("Pending runtime rebind requires recovery before commit")
@@ -3585,7 +3779,7 @@ def commit_runtime_binding_bundle(
             max_payload_bytes=_MAX_RUNTIME_BINDING_TEXT_ARTIFACT_BYTES,
         )
         if artifact.role == "manifest":
-            if old_state.get("kind") != "file":
+            if old_state.get("kind") not in ({"file", "missing"} if allow_absent_profile else {"file"}):
                 raise SwitchError("Internal manifest is not a regular file")
         elif old_state.get("kind") not in {"file", "missing"}:
             raise SwitchError(
@@ -3597,10 +3791,10 @@ def commit_runtime_binding_bundle(
                 "role": artifact.role,
                 "path": str(artifact.path),
                 "old_state": old_state,
-                "new_state": _runtime_rebind_payload_state(
+                "new_state": ({"kind": "missing"} if artifact.payload is None else _runtime_rebind_payload_state(
                     artifact.payload,
                     artifact.mode,
-                ),
+                )),
             }
         )
     if input_validator is not None:
@@ -3621,6 +3815,11 @@ def commit_runtime_binding_bundle(
         "state": "prepared",
         "artifacts": entries,
     }
+    if update is not None:
+        marker["schema_version"] = 5
+        marker["update"] = update
+        marker["allow_absent_profile"] = allow_absent_profile
+        marker["directories"] = _runtime_binding_missing_directories(tuple(artifact.path for artifact in ordered_artifacts))
     if bundle_scope == _RUNTIME_BINDING_BUNDLE_SCOPE_CLI_ONLY:
         marker["bundle_scope"] = bundle_scope
     if executable_swap_marker is not None:
@@ -3669,6 +3868,25 @@ def commit_runtime_binding_bundle(
     try:
         if fault_hook is not None:
             fault_hook("after_marker")
+        if update is not None:
+            for directory in marker["directories"]:
+                path = Path(directory["path"])
+                opened = _open_runtime_rebind_bundle_parent(store, path, create_missing=False)
+                if opened is None:
+                    raise SwitchError("Runtime binding directory parent is unavailable")
+                descriptor, leaf = opened
+                try:
+                    os.mkdir(leaf, mode=0o700, dir_fd=descriptor)
+                    info = os.stat(leaf, dir_fd=descriptor, follow_symlinks=False)
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                directory["identity"] = [info.st_dev, info.st_ino]
+                _require_runtime_rebind_marker_identity(marker_path, prepared_marker_identity, phase="directory creation")
+                write_json(marker_path, marker)
+                written, prepared_marker_identity = _read_runtime_rebind_marker(marker_path)
+                if written != marker:
+                    raise SwitchError("Runtime binding directory journal changed")
         if executable_swap_marker is not None:
             bound_path, candidate_path, backup_path = (
                 _runtime_rebind_executable_swap_paths(
@@ -3705,13 +3923,14 @@ def commit_runtime_binding_bundle(
                 prepared_marker_identity,
                 phase="bound-to-backup promotion",
             )
-            _rename_runtime_rebind_executable(
-                store,
-                source_path=bound_path,
-                destination_path=backup_path,
-                expected_source_state=old_state,
-                phase="bound-to-backup promotion",
-            )
+            if old_state["kind"] != "missing":
+                _rename_runtime_rebind_executable(
+                    store,
+                    source_path=bound_path,
+                    destination_path=backup_path,
+                    expected_source_state=old_state,
+                    phase="bound-to-backup promotion",
+                )
             _require_runtime_rebind_executable_swap_phase(
                 store,
                 executable_swap_marker,
@@ -3853,7 +4072,7 @@ def commit_runtime_binding_bundle(
         if marker_retired and terminal_committed:
             if retire_executable_backup and not backup_retired:
                 raise
-            return
+            return read_runtime_binding_terminal_receipt(store, update_id, input_fingerprint=input_fingerprint) if update_id else None
         try:
             _recover_runtime_binding_rebind(
                 store,
@@ -3878,8 +4097,10 @@ def commit_runtime_binding_bundle(
                     store,
                     executable_swap_marker,
                 )
-            return
+            return read_runtime_binding_terminal_receipt(store, update_id, input_fingerprint=input_fingerprint) if update_id else None
         raise
+
+    return read_runtime_binding_terminal_receipt(store, update_id, input_fingerprint=input_fingerprint) if update_id else None
 
 
 class LockedStoreMutation:
@@ -3891,10 +4112,12 @@ class LockedStoreMutation:
         *,
         operation: str,
         create_if_missing: bool,
+        recovery_guard: Callable[[], None] | None = None,
     ) -> None:
         self.store = store
         self.operation = operation
         self.create_if_missing = create_if_missing
+        self.recovery_guard = recovery_guard
         self._lock = _StoreLock(store.root)
         self._active = False
         self._root_created = False
@@ -3911,13 +4134,15 @@ class LockedStoreMutation:
         self._lock.__enter__()
         try:
             self._lock.revalidate()
+            if self.recovery_guard is not None:
+                self.recovery_guard()
             _recover_runtime_binding_rebind(self.store)
             classification = _classify_store_recovery(self.store)
             _raise_blocking_store_evidence(
                 classification,
                 operation=self.operation,
             )
-        except Exception:
+        except BaseException:
             self._lock.__exit__(None, None, None)
             raise
         self._active = True
@@ -3985,11 +4210,13 @@ def locked_store_mutation(
     *,
     operation: str,
     create_if_missing: bool = False,
+    recovery_guard: Callable[[], None] | None = None,
 ) -> LockedStoreMutation:
     return LockedStoreMutation(
         store,
         operation=operation,
         create_if_missing=create_if_missing,
+        recovery_guard=recovery_guard,
     )
 
 
@@ -10674,6 +10901,10 @@ def _execute_capture(
     validate_toml(source_config)
     if adapter.capture_state(source_config) != source_config_state:
         raise SwitchError(f"Capture config source changed after preflight: {source_config}")
+    captured_provenance = {}
+    if request.profile == "internal":
+        from codex_switch_parity import capture_catalog_provenance
+        captured_provenance = capture_catalog_provenance(store, source_config)
     source_auth = source_home / "auth.json"
     source_auth_state = adapter.capture_state(source_auth)
     source_auth_present = source_auth_state.get("kind") == "file"
@@ -10853,7 +11084,13 @@ def _execute_capture(
                 raise SwitchError(
                     f"Staged capture auth was not removed: {stage_dir / 'auth.json'}"
                 )
+        provenance = captured_provenance
+        if request.profile == "internal":
+            from codex_switch_parity import capture_catalog_provenance
+            if capture_catalog_provenance(store, source_config) != provenance:
+                raise SwitchError("Catalog provenance changed during capture")
         manifest_data = _canonical_json_object({
+            **provenance,
             "name": request.profile,
             "description": f"Captured from {source_home}",
             "codex_bin": codex_bin,
@@ -14142,15 +14379,30 @@ def _execute_switch(
                     "Prepared internal configuration changed; run set-bin internal "
                     "with the current backend before switching."
                 )
-        target_config_text = build_internal_home_config(
-            homes.official.path,
-            request.profile,
-            target_config_path,
-            config_path,
-            config_projection=parity_projection,
-        )
+        target_config_text = None
         if parity_projection is not None:
             from codex_switch_verify import validate_prepared_parity_config
+            from codex_switch_parity import ParityValidationError
+
+            # A full apply has already materialized the verified runtime.
+            # Reuse it only when the current profile/shared/runtime bytes
+            # still match the receipt; stale legacy support layers cannot
+            # replace that proven generation during activation.
+            try:
+                prepared_runtime_payload = target_config_path.read_bytes()
+                validate_prepared_parity_config(store, parity_projection, prepared_runtime_payload)
+                target_config_text = prepared_runtime_payload.decode("utf-8")
+            except (OSError, UnicodeDecodeError, ParityValidationError):
+                pass
+        if target_config_text is None:
+            target_config_text = build_internal_home_config(
+                homes.official.path,
+                request.profile,
+                target_config_path,
+                config_path,
+                config_projection=parity_projection,
+            )
+        if parity_projection is not None:
 
             validate_prepared_parity_config(store, parity_projection, target_config_text.encode())
         writes_auth = False

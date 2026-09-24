@@ -92,11 +92,11 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         self.work = self.root / "work"
         self.work.mkdir(mode=0o700)
 
-    def prepare(self, candidate=None, *, probe_runner=None, catalog_loader=None, timeouts=None, optional_sources=()):
+    def prepare(self, candidate=None, *, probe_runner=None, catalog_loader=None, timeouts=None, optional_sources=(), profile_source=None):
         selected = candidate or self.candidate
         input_options = {"optional_sources": optional_sources} if optional_sources else {}
         selected = replace(selected, source_config=parity.ConfigInputs.capture(
-            profile_config=self.profile, source_paths=(self.profile, self.shared), **input_options,
+            profile_config=self.profile, profile_source=profile_source, source_paths=(profile_source or self.profile, self.shared), **input_options,
         ))
         def success(request):
             return parity.ParityProbeCommandResult(
@@ -113,6 +113,111 @@ class ModelCatalogRoutingTests(unittest.TestCase):
             _probe_runner=probe_runner or success,
             _catalog_loader=catalog_loader,
         )
+
+    def test_explicit_private_seed_controls_final_runtime_and_probes_disable_hooks(self):
+        source = self.root / "private/config.toml"
+        source.parent.mkdir()
+        source.write_text(self.profile_payload + '[hooks]\nenabled = true\n[[hooks.start]]\ncommand = "touch forbidden"\n')
+        self.profile.write_text('model = "obsolete"\n')
+        (self.internal_home / "config.toml").write_text('model = "obsolete"\nnotify = ["bad"]\n')
+        observed = []
+        def probe(request):
+            observed.append(request)
+            config = (request.codex_home / "config.toml").read_text()
+            self.assertNotIn('hooks', config)
+            self.assertNotIn('forbidden', config)
+            self.assertIn('model = "model-a"', config)
+            return parity.ParityProbeCommandResult(returncode=0, stdout=fixtures.ParityPreparationTests.CORE_SUCCESS if request.name == "core_protocol" else fixtures.ParityPreparationTests.TYPED_SUCCESS, stderr="")
+        bundle = self.prepare(profile_source=source, probe_runner=probe)
+        self.assertTrue(observed)
+        self.assertIn(b'[hooks]', bundle.config_projection.payload_for(self.profile))
+        self.assertNotIn(b'obsolete', bundle.staged_runtime_config_payload)
+        self.assertNotIn(b'hooks', bundle.staged_runtime_config_payload)
+        self.assertEqual(self.profile.read_text(), 'model = "obsolete"\n')
+
+    def test_private_auth_is_available_only_in_isolated_native_probe_home(self):
+        auth = b'{"OPENAI_API_KEY":"isolated-fixture-value"}'
+        candidate = replace(self.candidate, auth_payload=auth)
+        observed = []
+        def probe(request):
+            observed.append(request.codex_home)
+            self.assertEqual((request.codex_home / "auth.json").read_bytes(), auth)
+            self.assertEqual((request.codex_home / "auth.json").stat().st_mode & 0o777, 0o600)
+            return parity.ParityProbeCommandResult(returncode=0, stdout=fixtures.ParityPreparationTests.CORE_SUCCESS if request.name == "core_protocol" else fixtures.ParityPreparationTests.TYPED_SUCCESS, stderr="")
+        bundle = self.prepare(candidate, probe_runner=probe)
+        self.assertTrue(bundle.healthy)
+        self.assertTrue(observed)
+        self.assertFalse((self.internal_home / "auth.json").exists())
+        self.assertNotIn(b'isolated-fixture-value', bundle.receipt_payload)
+
+    def test_private_seed_uses_native_rendering_without_old_profile_layers(self):
+        from codex_switch_home_sync import plugin_support_snapshot_name
+        source = self.root / "private/config.toml"
+        source.parent.mkdir()
+        source.write_text(self.profile_payload)
+        (self.internal_home / "config.toml").write_text('model = "obsolete"\nnotify = ["removed-hook"]\n')
+        (self.internal_home / "internal.config.toml").write_text('model = "obsolete"\n[hooks]\nenabled = true\n')
+        (self.profile.parent / plugin_support_snapshot_name("internal")).write_text('[hooks.state."removed:stop:0"]\ntrusted_hash = "sha256:old"\n')
+        bundle = self.prepare(replace(self.candidate, active_runtime_config_path=self.internal_home / "config.toml"), profile_source=source)
+        runtime = bundle.active_runtime_config_payload
+        self.assertIn(b'# codex-switch: managed runtime config for profile internal', runtime)
+        self.assertIn(b'keep = true', runtime)
+        self.assertNotIn(b'obsolete', runtime)
+        self.assertNotIn(b'removed-hook', runtime)
+        self.assertNotIn(b'[hooks', runtime)
+
+    def test_private_preparation_remains_verified_across_ordinary_activation(self):
+        from unittest.mock import patch
+        from codex_switch_home_sync import plugin_support_snapshot_name
+        from codex_switch_protocol_adapter import capability_receipt_path_for_launcher
+        from codex_switch_store import Store
+        from codex_switch_transaction import TransactionRequest, execute_transaction
+        from codex_switch_verify import validate_prepared_parity_config
+        source = self.root / "private/config.toml"
+        source.parent.mkdir()
+        source.write_text(self.profile_payload)
+        (self.profile.parent / plugin_support_snapshot_name("internal")).write_text('[hooks.state."removed:stop:0"]\ntrusted_hash = "sha256:old"\n')
+        runtime = self.internal_home / "config.toml"
+        bundle = self.prepare(replace(self.candidate, active_runtime_config_path=runtime), profile_source=source)
+        rebound = self.rebound(bundle)
+        bundle.receipt.overlay_path.with_name("receipt.json").chmod(0o600)
+        bundle.receipt.overlay_path.chmod(0o600)
+        runtime.write_bytes(bundle.active_runtime_config_payload)
+        self.shared.write_bytes(bundle.config_projection.payload_for(self.shared))
+        store = Store(self.root / "store", self.official_home, self.root / "agent.plist", internal_codex_home=self.internal_home)
+        store.ensure()
+        launcher = rebound.canonical_internal_binding.desktop_cli
+        launcher.parent.mkdir(exist_ok=True)
+        write_executable(launcher)
+        capability_path = capability_receipt_path_for_launcher(launcher)
+        capability_path.write_bytes(rebound.capability_receipt.payload)
+        manifest = dict(rebound.internal_manifest)
+        manifest.update({
+            "codex_home": str(self.internal_home), "home_selection_confirmed": True,
+            "app_capability_receipt_path": str(capability_path),
+            "app_capability_receipt_sha256": rebound.capability_receipt.payload_sha256,
+            "app_schema_sha256": rebound.capability_receipt.receipt.schema_sha256,
+        })
+        store.manifest_path("internal").write_text(json.dumps(manifest))
+        store.profile_dir("openai-official").mkdir()
+        store.manifest_path("openai-official").write_text(json.dumps({
+            "name": "openai-official", "codex_home": str(self.official_home),
+            "home_selection_confirmed": True,
+        }))
+        request = TransactionRequest(operation="switch", profile="internal", options={
+            "config_mode": "shared", "skip_shim": True, "skip_app_cli": True, "skip_launchctl": True,
+        })
+        for _ in range(2):
+            with patch("codex_switch_protocol_adapter.prepare_capability_receipt_artifact", return_value=rebound.capability_receipt):
+                result = execute_transaction(store, request)
+            self.assertEqual(result.outcome, "committed")
+            self.assertEqual(runtime.read_bytes(), bundle.active_runtime_config_payload)
+            self.assertNotIn(b"[hooks", runtime.read_bytes())
+            projection = parity.prepare_parity_config_projection(
+                config_inputs=parity.ConfigInputs.capture(profile_config=self.profile, source_paths=(self.profile, self.shared)),
+                overlay_path=bundle.receipt.overlay_path,
+            )
+            validate_prepared_parity_config(store, projection, runtime.read_bytes())
 
     def test_absent_catalog_reaches_default_model_comparison(self):
         bundle = self.prepare()
@@ -166,6 +271,63 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         manifest = dict(self.candidate.internal_manifest)
         manifest.update(bundle.manifest_metadata)
         return replace(self.candidate, internal_manifest=manifest)
+
+    def test_capture_retains_custom_origin_after_health_receipt_is_removed(self):
+        from codex_switch_capture import capture_profile
+        from codex_switch_store import Store
+        source = self.explicit_catalog()
+        candidate = self.rebound(self.prepare())
+        store = Store(self.root / "store", self.official_home, self.root / "agent.plist", internal_codex_home=self.internal_home)
+        store.manifest_path("internal").write_text(json.dumps(dict(candidate.internal_manifest), default=dict))
+        (self.internal_home / "config.toml").write_bytes(self.profile.read_bytes())
+        capture_profile(store, "internal", self.internal_home,
+            str(candidate.canonical_internal_binding.backend_cli), "", True, True)
+        manifest = store.load_manifest("internal")
+        from codex_switch_home_select import resolve_runtime_homes
+        restored_store = Store(store.root, self.official_home, self.root / "agent.plist")
+        self.assertEqual(resolve_runtime_homes(restored_store).internal.path, self.internal_home)
+        self.assertNotIn("parity_receipt_sha256", manifest)
+        self.profile.parent.joinpath("parity/receipt.json").unlink()
+        rebound = replace(candidate, internal_manifest=manifest)
+        bundle = self.prepare(rebound)
+        self.assertTrue(bundle.healthy)
+        self.assertEqual(bundle.overlay.source_catalog, source)
+        self.assertEqual(bundle.manifest_metadata["parity_model_catalog_kind"], "custom")
+
+    def test_default_origin_survives_recapture_and_still_compares_official_models(self):
+        from codex_switch_capture import capture_profile
+        from codex_switch_store import Store
+        first = self.prepare()
+        candidate = self.rebound(first)
+        manifest = dict(candidate.internal_manifest)
+        manifest["parity_catalog_provenance"] = parity.catalog_provenance_for_bundle(first)
+        store = Store(self.root / "store", self.official_home, self.root / "agent.plist", internal_codex_home=self.internal_home)
+        store.manifest_path("internal").write_text(json.dumps(manifest, default=dict))
+        (self.internal_home / "config.toml").write_bytes(self.profile.read_bytes())
+        capture_profile(store, "internal", self.internal_home, str(candidate.canonical_internal_binding.backend_cli), "", True, True)
+        self.profile.parent.joinpath("parity/receipt.json").unlink()
+        rebound = replace(candidate, internal_manifest=store.load_manifest("internal"))
+        self.assertEqual(self.prepare(rebound).manifest_metadata["parity_model_catalog_kind"], "runtime-cache")
+        self.official_cache.write_bytes(b'{"models":[{"slug":"model-a","multi_agent_version":"v1"}]}')
+        with self.assertRaisesRegex(parity.ParityValidationError, "parity.model.unclassified_drift"):
+            self.prepare(rebound)
+
+    def test_recapture_rejects_changed_managed_overlay_without_publishing(self):
+        from codex_switch_capture import capture_profile
+        from codex_switch_store import Store
+        self.explicit_catalog()
+        first = self.prepare()
+        candidate = self.rebound(first)
+        store = Store(self.root / "store", self.official_home, self.root / "agent.plist", internal_codex_home=self.internal_home)
+        manifest = dict(candidate.internal_manifest)
+        manifest["parity_catalog_provenance"] = parity.catalog_provenance_for_bundle(first)
+        original = json.dumps(manifest, default=dict)
+        store.manifest_path("internal").write_text(original)
+        (self.internal_home / "config.toml").write_bytes(self.profile.read_bytes())
+        first.receipt.overlay_path.write_bytes(b'{"models":[]}')
+        with self.assertRaises(parity.ParityValidationError):
+            capture_profile(store, "internal", self.internal_home, str(candidate.canonical_internal_binding.backend_cli), "", True, True)
+        self.assertEqual(store.manifest_path("internal").read_text(), original)
 
     def test_default_overlay_keeps_official_comparison_on_repeat(self):
         bundle = self.prepare()

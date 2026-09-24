@@ -863,6 +863,7 @@ def build_internal_home_config(
     config_projection: ConfigProjection | None = None,
 ) -> str:
     profile_seed_text_override: str | None = None
+    private_profile_seed = False
     if config_projection is not None:
         if not isinstance(config_projection, ConfigProjection):
             raise SwitchError("Internal home config projection is invalid.")
@@ -883,6 +884,9 @@ def build_internal_home_config(
             raise SwitchError(
                 "Parity config projection does not match the internal profile."
             )
+        private_profile_seed = (
+            config_projection.config_inputs.profile_source != canonical_profile
+        )
         shared_source_config = official_home / "config.toml"
         try:
             profile_seed_text_override = config_projection.payload_for(
@@ -901,11 +905,14 @@ def build_internal_home_config(
         profile_name,
         target_runtime_config,
         canonical_config,
-        profile_layer_configs=[
+        # A captured final seed replaces the saved profile input for this
+        # preparation only. Legacy profile layers must not restore removed
+        # settings. Ordinary runtime/profile fallback keeps its existing order.
+        profile_layer_configs=[] if private_profile_seed else [
             target_runtime_config.parent / f"{profile_name}.config.toml",
             official_home / f"{profile_name}.config.toml",
         ],
-        profile_shared_layer_configs=[
+        profile_shared_layer_configs=[] if private_profile_seed else [
             target_runtime_config.parent / plugin_support_snapshot_name(profile_name),
             official_home / plugin_support_snapshot_name(profile_name),
             canonical_config.parent / plugin_support_snapshot_name(profile_name),

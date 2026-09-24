@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import secrets
@@ -77,11 +78,26 @@ def check_empty(target: Path, store: Path) -> None:
     directory(store / "profiles")
     require_absent(store / "profiles/internal")
     require_absent(store / ".runtime-binding-rebind.json")
+    require_absent(store / ".internal-cli-bootstrap.json")
     require_absent(target)
     require_absent(target.with_name(".codex-internal-backup"))
     # A store with pending transaction state needs normal recovery, not bootstrap.
     if store.is_dir() and any(store.glob(".pending*")):
         raise ValueError("pending profile-store state blocks first installation")
+    if (store / "updates").exists():
+        from codex_switch_update import read_record, directory_state
+        directory_state(store / "updates", private=True)
+        for update in (store / "updates").iterdir():
+            directory_state(update, private=True)
+            record = read_record(update / "record.json")
+            # A cancelled empty-target stage has no published runtime/profile.
+            # It may retain its private candidate without blocking bootstrap.
+            if (record.get("state") != "cancelled"
+                    or record.get("target_path") != str(target.parent.resolve() / target.name)
+                    or record.get("store_path") != str(store.resolve())
+                    or record.get("snapshot", {}).get("target") is not None
+                    or record.get("profile_present") is not False):
+                raise ValueError("retained update state blocks empty-state bootstrap; inspect or cancel the update")
 
 
 def identity(path: Path) -> tuple:
@@ -117,6 +133,26 @@ def check_directory_identity(path: Path, descriptor: int) -> None:
         raise ValueError(f"first-install directory changed: {path}")
 
 
+def receipt_file_state(name: str, directory_fd: int) -> tuple | None:
+    try:
+        info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns)
+
+
+def unlink_owned_receipt(name: str, directory_fd: int, expected: tuple) -> bool:
+    observed = receipt_file_state(name, directory_fd)
+    # Private writes change size/mtime; published files must still match their
+    # complete frozen state. The open descriptor prevents inode reuse here.
+    if observed is None or observed[:len(expected)] != expected:
+        return False
+    os.unlink(name, dir_fd=directory_fd)
+    return True
+
+
 def publish(target: Path, store: Path, candidate: Path, version: str) -> None:
     directory(store)
     create_directory(store)
@@ -139,6 +175,12 @@ def publish(target: Path, store: Path, candidate: Path, version: str) -> None:
             # link() fails atomically with EEXIST, even for a dangling target link.
             complete = False
             link_failed = False
+            receipt_name = ".internal-cli-bootstrap.json"
+            receipt_temporary = ".internal-cli-bootstrap-" + secrets.token_hex(12) + ".tmp"
+            receipt_fd = None
+            receipt_created = None
+            receipt_frozen = None
+            receipt_link_failed = False
             try:
                 try:
                     os.link(candidate, target.name, dst_dir_fd=parent_fd, follow_symlinks=False)
@@ -156,17 +198,70 @@ def publish(target: Path, store: Path, candidate: Path, version: str) -> None:
                 check_directory_identity(store, store_fd)
                 require_absent(store / "profiles/internal")
                 os.fsync(parent_fd)
+                receipt = {
+                    "schema_version": 1, "target_path": str(target),
+                    "version": version, "mode": stat.S_IMODE(expected[2]),
+                    "sha256": expected[-1],
+                }
+                # Capture creation ownership before a handled signal can arrive.
+                previous_mask = signal.pthread_sigmask(
+                    signal.SIG_BLOCK, {signal.SIGHUP, signal.SIGINT, signal.SIGTERM})
+                try:
+                    receipt_fd = os.open(receipt_temporary,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                        0o600, dir_fd=store_fd)
+                    created = os.fstat(receipt_fd)
+                    receipt_created = (created.st_dev, created.st_ino)
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                with os.fdopen(receipt_fd, "w", closefd=False) as stream:
+                    json.dump(receipt, stream, sort_keys=True)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                frozen = os.fstat(receipt_fd)
+                receipt_frozen = (frozen.st_dev, frozen.st_ino, frozen.st_mode,
+                                  frozen.st_size, frozen.st_mtime_ns)
+                if receipt_file_state(receipt_temporary, store_fd) != receipt_frozen:
+                    raise ValueError("bootstrap receipt changed before publication")
+                check_directory_identity(store, store_fd)
+                # Publish complete bytes without replacing a concurrent receipt.
+                try:
+                    os.link(receipt_temporary, receipt_name, src_dir_fd=store_fd,
+                            dst_dir_fd=store_fd, follow_symlinks=False)
+                except OSError:
+                    receipt_link_failed = True
+                    raise
+                if receipt_file_state(receipt_name, store_fd) != receipt_frozen:
+                    raise ValueError("bootstrap receipt changed during publication")
+                if not unlink_owned_receipt(receipt_temporary, store_fd, receipt_created):
+                    raise ValueError("private bootstrap receipt was replaced")
+                os.fsync(store_fd)
                 complete = True
             finally:
-                if not complete and not link_failed:
+                removed_receipt = False
+                try:
                     try:
-                        owned = identity(target) == expected
-                    except (OSError, ValueError):
-                        owned = False
-                    if owned:
-                        check_directory_identity(target.parent, parent_fd)
-                        os.unlink(target.name, dir_fd=parent_fd)
-                        os.fsync(parent_fd)
+                        if not complete and receipt_frozen is not None and not receipt_link_failed:
+                            removed_receipt = unlink_owned_receipt(receipt_name, store_fd, receipt_frozen)
+                    finally:
+                        try:
+                            if receipt_created is not None:
+                                removed_receipt |= unlink_owned_receipt(receipt_temporary, store_fd, receipt_created)
+                            if removed_receipt:
+                                os.fsync(store_fd)
+                        finally:
+                            if receipt_fd is not None:
+                                os.close(receipt_fd)
+                finally:
+                    if not complete and not link_failed:
+                        try:
+                            owned = identity(target) == expected
+                        except (OSError, ValueError):
+                            owned = False
+                        if owned:
+                            check_directory_identity(target.parent, parent_fd)
+                            os.unlink(target.name, dir_fd=parent_fd)
+                            os.fsync(parent_fd)
         finally:
             os.close(parent_fd)
     finally:

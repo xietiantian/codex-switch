@@ -39,6 +39,7 @@ from codex_switch_plugins import missing_enabled_plugins, repair_profile_plugins
 from codex_switch_protocol_adapter import (
     capability_receipt_path_for_launcher,
     load_capability_receipt_artifact,
+    managed_probe_process,
     protocol_adapter_rule_set_digest,
 )
 from codex_switch_running_app import (
@@ -425,89 +426,97 @@ def run_bounded_process(
             duration_seconds=time.monotonic() - started,
         )
 
-    stdout_capture = _BoundedByteCapture(max_stream_bytes)
-    stderr_capture = _BoundedByteCapture(max_stream_bytes)
-    threads = (
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stdout, stdout_capture),
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_read_bounded_stream,
-            args=(process.stderr, stderr_capture),
-            daemon=True,
-        ),
-    )
-    for thread in threads:
-        thread.start()
-
-    timed_out = not _wait_for_process_until(
-        process,
-        started + timeout_seconds,
-    )
-    if timed_out:
-        _terminate_process_group(
-            process,
-            terminate_grace_seconds=terminate_grace_seconds,
+    threads: list[threading.Thread] = []
+    with managed_probe_process(
+        process, threads=threads,
+        terminate=lambda child: _terminate_process_group(
+            child, terminate_grace_seconds=terminate_grace_seconds,
             kill_grace_seconds=kill_grace_seconds,
-        )
-
-    drain_deadline = time.monotonic() + max(0.0, kill_grace_seconds)
-    for thread in threads:
-        thread.join(timeout=max(0.0, drain_deadline - time.monotonic()))
-    output_timed_out = any(thread.is_alive() for thread in threads)
-    if output_timed_out:
-        _terminate_process_group(
-            process,
-            terminate_grace_seconds=terminate_grace_seconds,
-            kill_grace_seconds=kill_grace_seconds,
-        )
-        final_drain_deadline = time.monotonic() + max(
-            0.0,
-            kill_grace_seconds,
-        )
+        ),
+    ):
+        stdout_capture = _BoundedByteCapture(max_stream_bytes)
+        stderr_capture = _BoundedByteCapture(max_stream_bytes)
+        threads.extend((
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stdout, stdout_capture),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process.stderr, stderr_capture),
+                daemon=True,
+            ),
+        ))
         for thread in threads:
-            thread.join(
-                timeout=max(
-                    0.0,
-                    final_drain_deadline - time.monotonic(),
-                )
-            )
-    if process.stdout is not None:
-        process.stdout.close()
-    if process.stderr is not None:
-        process.stderr.close()
+            thread.start()
 
-    stdout, stdout_truncated = stdout_capture.render()
-    stderr, stderr_truncated = stderr_capture.render()
-    returncode = process.poll()
-    timed_out = timed_out or output_timed_out
-    if output_timed_out:
-        status = "failed"
-        summary = f"{kind} timed out waiting for process output"
-    elif timed_out:
-        status = "failed"
-        summary = f"{kind} timed out after {timeout_seconds:g}s"
-    elif returncode == 0:
-        status = "passed"
-        summary = f"{kind} passed"
-    else:
-        status = "failed"
-        summary = f"{kind} failed with exit {returncode}"
-    return SmokeOutcome(
-        status=status,
-        kind=kind,
-        summary=summary,
-        command=command_tuple,
-        returncode=returncode,
-        stdout=stdout,
-        stderr=stderr,
-        timed_out=timed_out,
-        stdout_truncated=stdout_truncated,
-        stderr_truncated=stderr_truncated,
-        duration_seconds=time.monotonic() - started,
-    )
+        timed_out = not _wait_for_process_until(
+            process,
+            started + timeout_seconds,
+        )
+        if timed_out:
+            _terminate_process_group(
+                process,
+                terminate_grace_seconds=terminate_grace_seconds,
+                kill_grace_seconds=kill_grace_seconds,
+            )
+
+        drain_deadline = time.monotonic() + max(0.0, kill_grace_seconds)
+        for thread in threads:
+            thread.join(timeout=max(0.0, drain_deadline - time.monotonic()))
+        output_timed_out = any(thread.is_alive() for thread in threads)
+        if output_timed_out:
+            _terminate_process_group(
+                process,
+                terminate_grace_seconds=terminate_grace_seconds,
+                kill_grace_seconds=kill_grace_seconds,
+            )
+            final_drain_deadline = time.monotonic() + max(
+                0.0,
+                kill_grace_seconds,
+            )
+            for thread in threads:
+                thread.join(
+                    timeout=max(
+                        0.0,
+                        final_drain_deadline - time.monotonic(),
+                    )
+                )
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stderr is not None:
+            process.stderr.close()
+
+        stdout, stdout_truncated = stdout_capture.render()
+        stderr, stderr_truncated = stderr_capture.render()
+        returncode = process.poll()
+        timed_out = timed_out or output_timed_out
+        if output_timed_out:
+            status = "failed"
+            summary = f"{kind} timed out waiting for process output"
+        elif timed_out:
+            status = "failed"
+            summary = f"{kind} timed out after {timeout_seconds:g}s"
+        elif returncode == 0:
+            status = "passed"
+            summary = f"{kind} passed"
+        else:
+            status = "failed"
+            summary = f"{kind} failed with exit {returncode}"
+        return SmokeOutcome(
+            status=status,
+            kind=kind,
+            summary=summary,
+            command=command_tuple,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+            stdout_truncated=stdout_truncated,
+            stderr_truncated=stderr_truncated,
+            duration_seconds=time.monotonic() - started,
+        )
 
 
 def has_assignment(text: str, key: str) -> bool:
@@ -1156,6 +1165,7 @@ def run_app_server_smoke(
     home: Path,
     *,
     extra_env: dict[str, str] | None = None,
+    isolate_home: bool = False,
     response_timeout_seconds: float = APP_SERVER_RESPONSE_TIMEOUT_SECONDS,
     settle_seconds: float = APP_SERVER_SETTLE_SECONDS,
     max_line_bytes: int = APP_SERVER_MAX_LINE_BYTES,
@@ -1164,6 +1174,10 @@ def run_app_server_smoke(
     env["CODEX_HOME"] = str(home)
     if extra_env:
         env.update(extra_env)
+    if isolate_home:
+        home = home.resolve()
+        env.update({"HOME": str(home), "CODEX_HOME": str(home),
+                    "XDG_CONFIG_HOME": str(home / ".config")})
     protocol = AppServerSmokeProtocol(max_line_bytes=max_line_bytes)
     stderr_capture = _BoundedByteCapture(APP_SERVER_MAX_STDERR_BYTES)
     try:
@@ -1174,6 +1188,7 @@ def run_app_server_smoke(
             stderr=subprocess.PIPE,
             text=False,
             env=env,
+            cwd=home if isolate_home else None,
             start_new_session=True,
         )
     except FileNotFoundError:
@@ -1181,56 +1196,51 @@ def run_app_server_smoke(
     except OSError as exc:
         return 1, str(exc)
 
-    stdout_thread = threading.Thread(
-        target=read_app_server_stdout,
-        args=(process.stdout, protocol),
-        daemon=True,
-    )
-    stderr_thread = threading.Thread(
-        target=_read_bounded_stream,
-        args=(process.stderr, stderr_capture),
-        daemon=True,
-    )
-    stdout_thread.start()
-    stderr_thread.start()
-    reason: str | None = None
-    try:
-        write_app_server_message(process, app_server_initialize_message())
-        reason = protocol.wait_for_state(
-            process,
-            "initialize_complete",
-            APP_SERVER_INITIALIZE_ID,
-            timeout_seconds=response_timeout_seconds,
+    threads: list[threading.Thread] = []
+    with managed_probe_process(process, threads=threads, terminate=terminate_app_server_smoke):
+        stdout_thread = threading.Thread(
+            target=read_app_server_stdout,
+            args=(process.stdout, protocol),
+            daemon=True,
         )
-        if reason is None:
-            reason = protocol.expect_plugin_response()
-        if reason is None:
-            write_app_server_message(process, app_server_initialized_message())
-            write_app_server_message(process, app_server_plugin_list_message())
+        stderr_thread = threading.Thread(
+            target=_read_bounded_stream,
+            args=(process.stderr, stderr_capture),
+            daemon=True,
+        )
+        threads.extend((stdout_thread, stderr_thread))
+        stdout_thread.start()
+        stderr_thread.start()
+        reason: str | None = None
+        try:
+            write_app_server_message(process, app_server_initialize_message())
             reason = protocol.wait_for_state(
                 process,
-                "plugin_complete",
-                APP_SERVER_PLUGIN_LIST_ID,
+                "initialize_complete",
+                APP_SERVER_INITIALIZE_ID,
                 timeout_seconds=response_timeout_seconds,
             )
-        if reason is None:
-            reason = protocol.wait_for_settle(
-                process,
-                settle_seconds=settle_seconds,
-            )
-    except (BrokenPipeError, OSError) as exc:
-        returncode = process.poll()
-        reason = f"unable to write app-server smoke request: {exc}"
-        if returncode is not None:
-            reason = f"{reason} (exit {returncode})"
-    finally:
-        terminate_app_server_smoke(process)
-        stdout_thread.join(timeout=0.5)
-        stderr_thread.join(timeout=0.5)
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+            if reason is None:
+                reason = protocol.expect_plugin_response()
+            if reason is None:
+                write_app_server_message(process, app_server_initialized_message())
+                write_app_server_message(process, app_server_plugin_list_message())
+                reason = protocol.wait_for_state(
+                    process,
+                    "plugin_complete",
+                    APP_SERVER_PLUGIN_LIST_ID,
+                    timeout_seconds=response_timeout_seconds,
+                )
+            if reason is None:
+                reason = protocol.wait_for_settle(
+                    process,
+                    settle_seconds=settle_seconds,
+                )
+        except (BrokenPipeError, OSError) as exc:
+            returncode = process.poll()
+            reason = f"unable to write app-server smoke request: {exc}"
+            if returncode is not None:
+                reason = f"{reason} (exit {returncode})"
 
     if reason is not None:
         stderr, _stderr_truncated = stderr_capture.render()

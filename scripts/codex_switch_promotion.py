@@ -1045,6 +1045,7 @@ def _ensure_release(
     layout: PromotionLayout,
     *,
     fault_injector: Optional[FaultInjector] = None,
+    allow_historical_required_paths: bool = False,
 ) -> Tuple[Path, bool]:
     destination = layout.releases_dir / candidate.digest
     if _path_exists(destination):
@@ -1054,7 +1055,10 @@ def _ensure_release(
                 f"Promotion digest destination is invalid: {destination}",
             )
         try:
-            existing = validate_candidate(destination)
+            existing = validate_candidate(
+                destination,
+                allow_historical_required_paths=allow_historical_required_paths,
+            )
         except PromotionError as error:
             raise PromotionError(
                 "release_digest_mismatch",
@@ -1077,7 +1081,10 @@ def _ensure_release(
         shutil.copytree(candidate.root, stage, symlinks=True)
         stage_identity = _node_identity(stage)
         stage_snapshot = _tree_snapshot(stage)
-        copied = validate_candidate(stage, expected_version=candidate.version)
+        copied = validate_candidate(
+            stage, expected_version=candidate.version,
+            allow_historical_required_paths=allow_historical_required_paths,
+        )
         if copied.digest != candidate.digest:
             raise PromotionError(
                 "candidate_changed",
@@ -1278,7 +1285,9 @@ def _validate_legacy_root(
     digest: str,
     version: Optional[str],
 ) -> PromotionCandidate:
-    candidate = validate_candidate(root, expected_version=version)
+    candidate = validate_candidate(
+        root, expected_version=version, allow_historical_required_paths=True,
+    )
     if candidate.digest != digest:
         raise PromotionError(
             "legacy_recovery_failed",
@@ -1412,7 +1421,7 @@ def _prepare_legacy_release(
     manifest_path = current / "bundle-manifest.json"
     try:
         if _path_exists(manifest_path):
-            candidate = validate_candidate(current)
+            candidate = validate_candidate(current, allow_historical_required_paths=True)
             _require_identity(
                 current,
                 current_identity,
@@ -1423,6 +1432,7 @@ def _prepare_legacy_release(
                 candidate,
                 layout,
                 fault_injector=fault_injector,
+                allow_historical_required_paths=True,
             )
             return candidate, release, "bundle", candidate.digest
 

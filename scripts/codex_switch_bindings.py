@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 import stat
+import shlex
 import subprocess
 import tempfile
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
-from typing import Mapping
+from typing import Callable, Mapping
 
 from codex_switch_config import config_uses_file_auth
 from codex_switch_core import (
@@ -31,6 +32,8 @@ from codex_switch_home_select import resolve_runtime_homes
 from codex_switch_app_wrapper import write_profile_app_wrapper
 from codex_switch_parity import (
     ConfigInputs,
+    ParityBundle,
+    catalog_provenance_for_bundle,
     ParityCandidate,
     ParityTimeouts,
     prepare_parity_bundle,
@@ -60,7 +63,7 @@ from codex_switch_transaction import (
     locked_store_mutation,
 )
 from codex_switch_update_policy import extract_semantic_version
-from codex_switch_verify import run_app_server_smoke, sanitize_external_text
+from codex_switch_verify import run_app_server_smoke, run_bounded_process, sanitize_external_text
 
 
 def login_config_uses_file_auth(config_path: Path) -> bool:
@@ -320,12 +323,49 @@ def _materialized_active_internal_config(
 
 
 @dataclass(frozen=True)
+class PrivateRuntimePreparation:
+    """Validated private apply context, never populated by public CLI arguments."""
+    candidate_manifest: Mapping[str, object]
+    source_home: Path | None
+    update_id: str
+    input_fingerprint: str
+    frozen_input_validator: Callable[[], None]
+    allow_absent_profile: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.candidate_manifest, Mapping) or not callable(self.frozen_input_validator) or type(self.allow_absent_profile) is not bool:
+            raise SwitchError("Private runtime preparation contract is invalid")
+        if self.source_home is not None and (not isinstance(self.source_home, Path) or not self.source_home.is_absolute()):
+            raise SwitchError("Private runtime source home must be absolute")
+        object.__setattr__(self, "candidate_manifest", MappingProxyType(dict(self.candidate_manifest)))
+
+
+def _private_auth_snapshot(source_home: Path) -> tuple[bytes | None, object]:
+    from codex_switch_parity import _regular_file_snapshot, ParityValidationError
+    path = source_home / "auth.json"
+    try:
+        snapshot = _regular_file_snapshot(path, code="parity.auth.source_unsafe", label="private authentication input", max_bytes=1024 * 1024, capture_payload=True)
+    except ParityValidationError as exc:
+        if not isinstance(exc.__cause__, FileNotFoundError):
+            raise
+        return None, None
+    try:
+        document = json.loads(snapshot.payload)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SwitchError("Private authentication input is malformed") from exc
+    if not isinstance(document, dict):
+        raise SwitchError("Private authentication input must be an object")
+    return snapshot.payload, snapshot
+
+
+@dataclass(frozen=True)
 class _InternalRuntimeRebindResult:
     binding: object
     manifest: Mapping[str, object]
     capability_receipt: object
     parity_bundle: object
     artifacts: tuple[RuntimeBindingTextArtifact, ...]
+    terminal_receipt: Mapping[str, object] | None = None
 
 
 def _stable_executable_identity(
@@ -435,18 +475,17 @@ def _exact_executable_version(
     label: str,
 ) -> str:
     try:
-        result = subprocess.run(
-            [str(path), "--version"],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=5,
-        )
+        with tempfile.TemporaryDirectory(prefix="codex-binding-version-") as temp:
+            result = run_bounded_process(
+                [str(path), "--version"], kind="runtime version",
+                env={"PATH": os.environ.get("PATH", os.defpath), "HOME": temp,
+                     "CODEX_HOME": temp, "PYTHONDONTWRITEBYTECODE": "1"},
+                cwd=temp, timeout_seconds=5,
+            )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise SwitchError(f"{label} version probe failed: {path}") from exc
     output = f"{result.stdout}\n{result.stderr}"
-    if result.returncode != 0:
+    if result.returncode != 0 or result.timed_out:
         raise SwitchError(
             f"{label} version probe failed (exit {result.returncode})"
         )
@@ -489,16 +528,41 @@ def cmd_set_bin(
             "openai-official is owned by the verified ChatGPT.app bundled CLI; "
             "update ChatGPT.app or rerun init instead of set-bin"
         )
-    manifest = store.load_manifest(args.name)
+    private_inputs = getattr(args, "rebind_private_inputs", None)
+    if private_inputs is not None and (args.name != "internal" or not isinstance(private_inputs, PrivateRuntimePreparation)):
+        raise SwitchError("Private runtime preparation contract is invalid")
+    manifest_path = store.manifest_path(args.name)
+    if private_inputs is not None and private_inputs.allow_absent_profile and not os.path.lexists(manifest_path):
+        if os.path.lexists(store.profile_dir(args.name)):
+            raise SwitchError("Absent profile publication found a partial profile")
+        manifest = None
+    else:
+        manifest = store.load_manifest(args.name)
+    requested_swap = getattr(args, "rebind_executable_swap", None)
+    absent_target = (
+        private_inputs is not None
+        and isinstance(requested_swap, RuntimeBindingExecutableSwap)
+        and requested_swap.old_sha256 is None
+        and requested_swap.old_mode is None
+        and requested_swap.bound_path == Path(args.codex_bin).expanduser()
+        and not os.path.lexists(requested_swap.bound_path)
+    )
     codex_bin = (
-        resolve_internal_codex_bin(args.codex_bin)
-        if args.name == "internal"
-        else resolve_codex_bin(args.codex_bin)
+        str(requested_swap.bound_path) if absent_target else (
+            resolve_internal_codex_bin(args.codex_bin)
+            if args.name == "internal"
+            else resolve_codex_bin(args.codex_bin)
+        )
     )
     if not codex_bin:
         raise SwitchError("No codex binary path provided and none found on PATH.")
     bin_path = Path(codex_bin).expanduser()
-    if not bin_path.exists():
+    if not bin_path.exists() and not (
+        private_inputs is not None
+        and isinstance(getattr(args, "rebind_executable_swap", None), RuntimeBindingExecutableSwap)
+        and args.rebind_executable_swap.bound_path == bin_path
+        and args.rebind_executable_swap.old_sha256 is None
+    ):
         raise SwitchError(f"codex_bin does not exist: {bin_path}")
 
     if args.name != "internal":
@@ -555,7 +619,12 @@ def cmd_set_bin(
     # Keep the legacy capture source separate from the resolved runtime homes.
     store.official_codex_home = home_plan.official.path
     store.internal_codex_home = home_plan.internal.path
-    candidate_manifest = dict(home_plan.manifest_updates.get("internal", manifest))
+    candidate_manifest = dict(private_inputs.candidate_manifest if private_inputs is not None else home_plan.manifest_updates.get("internal", manifest))
+    if private_inputs is not None:
+        candidate_manifest["codex_home"] = str(home_plan.internal.path)
+        candidate_manifest["home_selection_confirmed"] = True
+        candidate_manifest.setdefault("name", "internal")
+        candidate_manifest.setdefault("managed_files", ["config.toml", "auth.json"])
     candidate_manifest.pop("internal_cli_generation", None)
     candidate_manifest.pop("internal_app_readiness", None)
     candidate_manifest["codex_bin"] = str(bin_path)
@@ -563,28 +632,22 @@ def cmd_set_bin(
     candidate_manifest["app_cli_binding"] = "launchagent"
     candidate_manifest["runtime_binding"] = "canonical"
     candidate_manifest["updated_at"] = now_stamp()
-    candidate_binding = resolve_store_runtime_binding(
-        store,
-        "internal",
-        manifest=candidate_manifest,
-        inventory=DesktopInventory(current=None),
-    )
     execution_manifest = dict(candidate_manifest)
     execution_manifest["codex_bin"] = str(execution_bin_path)
-    execution_binding = (
-        candidate_binding
-        if execution_bin_path == candidate_binding.backend_cli
-        else resolve_store_runtime_binding(
-            store,
-            "internal",
-            manifest=execution_manifest,
-            inventory=DesktopInventory(current=None),
-        )
+    execution_binding = resolve_store_runtime_binding(
+        store, "internal", manifest=execution_manifest,
+        inventory=DesktopInventory(current=None),
+    )
+    candidate_binding = (
+        replace(execution_binding, shell_cli=bin_path, backend_cli=bin_path)
+        if private_inputs is not None and not bin_path.exists()
+        else resolve_store_runtime_binding(store, "internal", manifest=candidate_manifest,
+            inventory=DesktopInventory(current=None))
     )
 
     preparation_lock = (
         locked_store_mutation(store, operation="runtime rebind")
-        if executable_swap is None
+        if executable_swap is None and private_inputs is None
         else nullcontext(None)
     )
     with preparation_lock as locked_store:
@@ -607,10 +670,10 @@ def cmd_set_bin(
                 expected_active_payload,
             )
         manifest_path = store.manifest_path("internal")
-        current_manifest = store.load_manifest("internal")
+        current_manifest = store.load_manifest("internal") if os.path.lexists(manifest_path) else None
         if current_manifest != manifest:
             raise SwitchError("Internal manifest changed before runtime rebind")
-        original_manifest_payload = manifest_path.read_bytes()
+        original_manifest_payload = manifest_path.read_bytes() if current_manifest is not None else None
         with tempfile.TemporaryDirectory(
             prefix=".runtime-rebind-",
             dir=store.root,
@@ -624,7 +687,7 @@ def cmd_set_bin(
             final_receipt_path = capability_receipt_path_for_launcher(
                 candidate_binding.desktop_cli
             )
-            raw_receipt_path = current_manifest.get(
+            raw_receipt_path = (current_manifest or {}).get(
                 "app_capability_receipt_path"
             )
             receipt_path_matches = (
@@ -638,7 +701,7 @@ def cmd_set_bin(
                 ),
                 expected_payload_sha256=(
                     str(
-                        current_manifest.get(
+                        (current_manifest or {}).get(
                             "app_capability_receipt_sha256"
                         )
                         or ""
@@ -647,7 +710,7 @@ def cmd_set_bin(
                     else ""
                 ),
                 expected_schema_sha256=(
-                    str(current_manifest.get("app_schema_sha256") or "")
+                    str((current_manifest or {}).get("app_schema_sha256") or "")
                     if receipt_path_matches
                     else ""
                 ),
@@ -686,18 +749,27 @@ def cmd_set_bin(
                 store.profile_dir("internal") / "config.toml"
             )
             shared_config_path = store.official_codex_home / "config.toml"
+            source_home = private_inputs.source_home if private_inputs is not None else None
+            source_config_path = source_home / "config.toml" if source_home is not None else profile_config_path
             config_inputs = ConfigInputs.capture(
-                profile_config=profile_config_path,
-                source_paths=(
-                    profile_config_path,
-                    shared_config_path,
-                ),
+                profile_config=profile_config_path, profile_source=source_config_path,
+                source_paths=(source_config_path, shared_config_path),
                 optional_sources=(shared_config_path,),
             )
+            auth_payload, auth_snapshot = _private_auth_snapshot(source_home) if source_home is not None else (None, None)
+            if source_home is not None and auth_payload is None:
+                from codex_switch_config_document import ConfigDocument
+                config_data = ConfigDocument.parse(source_config_path.read_text(), "private runtime config").data
+                providers = config_data.get("model_providers")
+                provider = providers.get(config_data.get("model_provider"), {}) if isinstance(providers, Mapping) else {}
+                if isinstance(provider, Mapping) and provider.get("requires_openai_auth") is True:
+                    raise SwitchError("Private runtime input requires auth.json")
             active_runtime_config_path = _materialized_active_internal_config(
                 store,
                 candidate_binding,
             )
+            if source_home is not None:
+                active_runtime_config_path = candidate_binding.codex_home / "config.toml"
             parity_bundle = prepare_parity_bundle(
                 ParityCandidate(
                     official_binding=official_binding,
@@ -705,6 +777,7 @@ def cmd_set_bin(
                     internal_manifest=candidate_manifest,
                     capability_receipt=receipt_artifact,
                     source_config=config_inputs,
+                    auth_payload=auth_payload,
                     adapter_rule_set_sha256=(
                         protocol_adapter_rule_set_digest()
                     ),
@@ -718,6 +791,8 @@ def cmd_set_bin(
             candidate_manifest.update(
                 dict(parity_bundle.manifest_metadata)
             )
+            if isinstance(parity_bundle, ParityBundle):
+                candidate_manifest["parity_catalog_provenance"] = catalog_provenance_for_bundle(parity_bundle)
             staged_runtime_payload = (
                 parity_bundle.staged_runtime_config_payload
             )
@@ -726,6 +801,8 @@ def cmd_set_bin(
                 staged_runtime_payload,
                 mode=0o600,
             )
+            if auth_payload is not None:
+                atomic_write(smoke_home / "auth.json", auth_payload, mode=0o600)
             parity_staged_receipt = getattr(
                 parity_bundle,
                 "staged_capability_receipt_path",
@@ -758,6 +835,10 @@ def cmd_set_bin(
                 manifest_override=candidate_manifest,
             )
             smoke_launcher_payload = smoke_launcher.read_bytes()
+            smoke_launcher_payload = smoke_launcher_payload.replace(
+                b"set -eu\n", ("set -eu\ncd " + shlex.quote(str(smoke_home)) + "\n").encode(), 1,
+            )
+            atomic_write(smoke_launcher, smoke_launcher_payload, mode=0o755)
             if (
                 b"codex_switch_app_proxy.py" not in smoke_launcher_payload
                 or str(execution_binding.backend_cli).encode()
@@ -771,7 +852,7 @@ def cmd_set_bin(
                 store=store,
                 name="internal",
                 app_cli_path=str(staged_launcher),
-                codex_bin=str(candidate_binding.backend_cli),
+                codex_bin=str(execution_binding.backend_cli if not bin_path.exists() else candidate_binding.backend_cli),
                 switch_scripts=Path(__file__).resolve().parent,
                 capability_receipt_path=final_receipt_path,
                 schema_sha256=capability_receipt.schema_sha256,
@@ -779,6 +860,13 @@ def cmd_set_bin(
                 manifest_override=candidate_manifest,
             )
             staged_payload = staged_launcher.read_bytes()
+            if not bin_path.exists():
+                previous_assignment = ("CODEX_BIN=" + shlex.quote(str(execution_binding.backend_cli)) + "\n").encode()
+                final_assignment = ("CODEX_BIN=" + shlex.quote(str(candidate_binding.backend_cli)) + "\n").encode()
+                if staged_payload.count(previous_assignment) != 1:
+                    raise SwitchError("Candidate wrapper backend assignment is ambiguous")
+                staged_payload = staged_payload.replace(previous_assignment, final_assignment, 1)
+                atomic_write(staged_launcher, staged_payload, mode=0o755)
             if (
                 b"codex_switch_app_proxy.py" not in staged_payload
                 or str(candidate_binding.backend_cli).encode() not in staged_payload
@@ -795,7 +883,10 @@ def cmd_set_bin(
             code, smoke_output = run_app_server_smoke(
                 str(smoke_launcher),
                 smoke_home,
+                isolate_home=True,
                 extra_env={
+                    "HOME": str(smoke_home),
+                    "XDG_CONFIG_HOME": str(smoke_home / ".config"),
                     "CODEX_SWITCH_REBIND_SMOKE": "1",
                     "CODEX_SWITCH_REBIND_SMOKE_HOME": str(smoke_home),
                     "CODEX_SWITCH_REBIND_CAPABILITY_RECEIPT": str(
@@ -892,16 +983,18 @@ def cmd_set_bin(
                     )
                 else:
                     revalidate_parity_bundle_inputs(parity_bundle)
-                observed_manifest = store.load_manifest("internal")
+                if not marker_present and manifest is None and os.path.lexists(store.profile_dir("internal")):
+                    raise SwitchError("Absent internal profile changed before runtime publication")
+                observed_manifest = store.load_manifest("internal") if os.path.lexists(manifest_path) else None
                 if not marker_present:
                     manifest_matches = (
                         observed_manifest == manifest
-                        and manifest_path.read_bytes()
+                        and (manifest_path.read_bytes() if observed_manifest is not None else None)
                         == original_manifest_payload
                     )
                 elif observed_manifest == manifest:
                     manifest_matches = (
-                        manifest_path.read_bytes()
+                        (manifest_path.read_bytes() if observed_manifest is not None else None)
                         == original_manifest_payload
                     )
                 else:
@@ -922,7 +1015,7 @@ def cmd_set_bin(
                     allowed_official.add(official_manifest_payload)
                 if observed_official not in allowed_official:
                     raise SwitchError("Official home binding changed before runtime rebind")
-                if (
+                if source_home is None and (
                     _materialized_active_internal_config(
                         store,
                         candidate_binding,
@@ -932,6 +1025,9 @@ def cmd_set_bin(
                     raise SwitchError(
                         "Active internal runtime config changed before rebind"
                     )
+
+                if source_home is not None and _private_auth_snapshot(source_home) != (auth_payload, auth_snapshot):
+                    raise SwitchError("Private authentication input changed before runtime publication")
 
             validate_rebind_inputs()
             projection_payloads = _parity_projection_payloads(parity_bundle)
@@ -1040,6 +1136,11 @@ def cmd_set_bin(
                         mode=0o600,
                     )
                 )
+            if source_home is not None:
+                artifacts.extend((
+                    RuntimeBindingTextArtifact("profile_auth", store.profile_dir("internal") / "auth.json", auth_payload, 0o600),
+                    RuntimeBindingTextArtifact("active_runtime_auth", candidate_binding.codex_home / "auth.json", auth_payload, 0o600),
+                ))
             artifacts.extend(
                 (
                     RuntimeBindingTextArtifact(
@@ -1102,6 +1203,10 @@ def cmd_set_bin(
                     None,
                 ),
             }
+            if private_inputs is not None:
+                commit_options.update(update_id=private_inputs.update_id,
+                    input_fingerprint=private_inputs.input_fingerprint,
+                    allow_absent_profile=private_inputs.allow_absent_profile)
             if prepared_validator is not None:
                 commit_options["prepared_validator"] = lambda: (
                     prepared_validator(rebind_result)
@@ -1121,10 +1226,13 @@ def cmd_set_bin(
                     raise SwitchError(
                         "Internal runtime promotion lock is unavailable"
                     )
-                commit_runtime_binding_bundle(
+                if private_inputs is not None:
+                    private_inputs.frozen_input_validator()
+                terminal_receipt = commit_runtime_binding_bundle(
                     active_lock,
                     **commit_options,
                 )
+                rebind_result = replace(rebind_result, terminal_receipt=terminal_receipt)
 
     if not getattr(args, "suppress_rebind_success_output", False):
         print(f"Updated internal codex_bin: {candidate_binding.backend_cli}")
@@ -1140,36 +1248,28 @@ def _verify_internal_update_promotion(
     store: object,
     *,
     result: _InternalRuntimeRebindResult,
-    executable_swap: RuntimeBindingExecutableSwap,
+    executable_swap: RuntimeBindingExecutableSwap | None,
     target_version: str,
 ) -> None:
+    expected_bound = executable_swap.bound_path if executable_swap is not None else result.binding.backend_cli
     bound_path, bound_mode, bound_sha256 = _stable_executable_identity(
-        executable_swap.bound_path,
-        label="Promoted internal binary",
+        expected_bound, label="Promoted internal binary",
     )
-    if (
-        bound_path != executable_swap.bound_path
-        or bound_mode != executable_swap.new_mode
-        or bound_sha256 != executable_swap.new_sha256
-    ):
-        raise SwitchError(
-            "Promoted internal binary does not match the staged candidate"
-        )
-    _backup_path, backup_mode, backup_sha256 = _stable_executable_identity(
-        executable_swap.backup_path,
-        label="Last-known-good internal backup",
-    )
-    if (
-        backup_mode != executable_swap.old_mode
-        or backup_sha256 != executable_swap.old_sha256
-    ):
-        raise SwitchError(
-            "Last-known-good internal backup does not match the prior binary"
-        )
-    if os.path.lexists(executable_swap.candidate_path):
-        raise SwitchError(
-            "Promoted internal candidate path was not retired by the swap"
-        )
+    if executable_swap is not None:
+        if (bound_path != executable_swap.bound_path or bound_mode != executable_swap.new_mode
+            or bound_sha256 != executable_swap.new_sha256):
+            raise SwitchError("Promoted internal binary does not match the staged candidate")
+        if executable_swap.old_sha256 is None:
+            if os.path.lexists(executable_swap.backup_path):
+                raise SwitchError("First runtime publication has an unexpected backup")
+        else:
+            _backup_path, backup_mode, backup_sha256 = _stable_executable_identity(
+                executable_swap.backup_path, label="Last-known-good internal backup",
+            )
+            if backup_mode != executable_swap.old_mode or backup_sha256 != executable_swap.old_sha256:
+                raise SwitchError("Last-known-good internal backup does not match the prior binary")
+        if os.path.lexists(executable_swap.candidate_path):
+            raise SwitchError("Promoted internal candidate path was not retired by the swap")
     _exact_executable_version(
         bound_path,
         expected_version=target_version,
@@ -1199,6 +1299,10 @@ def _verify_internal_update_promotion(
         )
 
     for artifact in result.artifacts:
+        if artifact.payload is None:
+            if os.path.lexists(artifact.path):
+                raise SwitchError(f"Promoted runtime auth absence is invalid: {artifact.role}")
+            continue
         try:
             info = artifact.path.lstat()
         except OSError as exc:
@@ -1238,7 +1342,7 @@ def _verify_internal_update_promotion(
         getattr(parity_receipt, "healthy", None) is not True
         or getattr(internal_fingerprint, "backend_cli", None) != bound_path
         or getattr(internal_fingerprint, "binary_sha256", None)
-        != executable_swap.new_sha256
+        != bound_sha256
     ):
         raise SwitchError(
             "Promoted parity receipt does not match the canonical binding"
@@ -1282,7 +1386,10 @@ def _verify_internal_update_promotion(
         code, smoke_output = run_app_server_smoke(
             str(binding.desktop_cli),
             smoke_home,
+            isolate_home=True,
             extra_env={
+                "HOME": str(smoke_home),
+                "XDG_CONFIG_HOME": str(smoke_home / ".config"),
                 "CODEX_SWITCH_REBIND_SMOKE": "1",
                 "CODEX_SWITCH_REBIND_SMOKE_HOME": str(smoke_home),
                 "CODEX_SWITCH_REBIND_CAPABILITY_RECEIPT": str(
@@ -1459,7 +1566,12 @@ def _promote_internal_cli_update(
     manifest: Mapping[str, object],
     executable_swap: RuntimeBindingExecutableSwap,
     target_version: str,
-) -> None:
+    update_id: str | None = None,
+    input_fingerprint: str | None = None,
+    frozen_input_validator: Callable[[], None] | None = None,
+) -> dict[str, object] | None:
+    if frozen_input_validator is not None and not callable(frozen_input_validator):
+        raise SwitchError("Internal CLI-only frozen input validator is invalid")
     manifest_path = store.manifest_path("internal")
     original_manifest_payload = manifest_path.read_bytes()
     candidate_manifest = dict(manifest)
@@ -1518,7 +1630,9 @@ def _promote_internal_cli_update(
         store,
         operation="internal CLI-only update promotion",
     ) as locked_store:
-        commit_runtime_binding_bundle(
+        if frozen_input_validator is not None:
+            frozen_input_validator()
+        terminal_receipt = commit_runtime_binding_bundle(
             locked_store,
             artifacts=(artifact,),
             executable_swap=executable_swap,
@@ -1526,6 +1640,8 @@ def _promote_internal_cli_update(
             prepared_validator=validate_promoted_generation,
             retire_executable_backup=True,
             bundle_scope="cli-only",
+            update_id=update_id,
+            input_fingerprint=input_fingerprint,
         )
 
     print(f"update-internal: verified CLI version {target_version}.")
@@ -1534,6 +1650,7 @@ def _promote_internal_cli_update(
         "Internal App readiness: unverified; split keeps Codex App on the "
         "official bundle."
     )
+    return terminal_receipt
 
 
 def cmd_promote_internal_update(args: argparse.Namespace) -> None:
