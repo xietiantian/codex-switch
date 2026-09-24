@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: implementation
+current_stage: completed
 
 current_change:
   id: support-staged-internal-update
-  status: in_progress
+  status: completed
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: false
-  verification_passed: false
+  implementation_done: true
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,7 +41,7 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-24-staged-internal-update-delivered
+  last_checkpoint_id: 2026-09-24-released-binding-correction-delivered
   last_checkpoint_file: .planning/devflow/verification/support-staged-internal-update.md
   compact_recommended: false
   compact_status: not_needed
@@ -71,15 +71,15 @@ context_management:
 goal_gate:
   id: support-staged-internal-update
   required: true
-  status: active
-  reason: approved correction must restore released explicit binding compatibility and prove migration before renewed delivery
+  status: complete
+  reason: released explicit binding migration is verified in source and exact installed package and delivered to the existing PR
   suggested_goal: none
 
 context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: verified_staged_update_delivered_to_existing_pr
+  last_decision: verified_released_binding_correction_delivered_to_existing_pr
   last_goal_status: aligned
   goal_summary: Deliver durable stage and private transactional apply with source provenance, recovery, isolated proof and existing PR delivery.
 ---
@@ -90,12 +90,13 @@ context_health:
 
 New change: `support-staged-internal-update`; baseline `956197209b2d`.
 Native proposal/design/tasks and three capability delta specs are written.
-Implementation and independent Spec/Standards review are complete. All 1,246
-source cases are covered, including explicit reruns of opt-in cases. Exact
-implementation `ef69b01` passed prior-package upgrade, 113 installed tests and
-unchanged manifests without bytecode residue, and is delivered to the existing
-PR. All active change tasks are complete. Historical results below are preserved
-and do not substitute for current acceptance evidence.
+Implementation and independent Spec/Standards review are complete, including
+the section 8 released-binding correction. Discovery runs 1,252 cases with 13
+conditional skips, each covered by explicit native/interpreter runs; the profile
+entrypoint passes 227 cases. Exact implementation `c15bb74` passes prior-package
+upgrade, 119 installed tests and unchanged manifests without bytecode residue,
+and is pushed to the existing PR. All active change tasks are complete.
+Historical results below do not substitute for current acceptance evidence.
 
 The requester approved the complete generic target, isolated verification and
 existing PR commit/push. Execution is auto-until-terminal, using only the new
@@ -106,11 +107,11 @@ Goal Contract is in the design. No external implementation provider is selected.
 
 ## Current Next Action
 
-Approved section 8 corrects the initial binding equality regression. Update the
-existing design/spec, run public migration RED/GREEN and isolated native proof,
-then deliver to the existing PR. Earlier passing counts did not cover released
-explicit-compatibility init state and do not establish this repair's acceptance.
-Retain the exact previous package.
+No implementation remains for approved section 8. Preserve the verified package
+and released-init migration evidence. Saved intent and actual Desktop reference
+are independently frozen; changes to either after staging still block apply.
+The earlier passing counts omitted released explicit-compatibility init state;
+fresh public/native and exact installed migration tests close that gap.
 
 Historical delivery: retain the exact package
 and its evidence. The cleanup planner refuses automatic reclamation for

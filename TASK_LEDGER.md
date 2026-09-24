@@ -16,13 +16,14 @@
 - Standing authority: implement, isolated tests, commit/push existing PR branch.
   Excluded: live installation/config/Desktop/provider changes, release, archive,
   destructive cleanup, new dependency or unrelated workflow expansion.
-- Status: section 8 correction in verification. Initial implementation `ef69b01` was delivered to the existing PR;
-  1,246 source cases are covered, 113 installed tests pass, and exact package
-  manifests remain valid without bytecode. Spec/Standards findings are closed.
-  Those historical cases omitted released explicit-binding migration. The
-  approved correction has fresh public/native migration proof; final broad and
-  package checks precede renewed delivery. No release, archive or live
-  environment change is included.
+- Status: section 8 complete; implementation `c15bb74` is pushed to the existing
+  PR. Fresh discovery runs 1,252 cases with 13 conditional skips, all covered by
+  explicit native/interpreter runs; the profile entrypoint passes 227 cases.
+  Exact-package upgrade passes 119 installed cases, including released-init
+  migration, with valid before/after manifests and no Python bytecode residue.
+  Spec/Standards reviews have no blockers. Earlier `ef69b01`/1,246-case evidence
+  omitted released explicit bindings and is historical, not repair acceptance.
+  No release, archive or live environment change is included.
 - Previous `respect-custom-model-catalog` and other completed repairs remain
   archived. Preserve existing local verification roots and untracked research.
 

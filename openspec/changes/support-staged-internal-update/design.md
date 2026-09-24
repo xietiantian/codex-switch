@@ -48,7 +48,7 @@ the supported `DIR/config.toml` contract.
 ## Skill Routing Ledger and Capability Evidence
 
 - kind: behavior/API/persistence and compatibility change; mode: Full OpenSpec.
-- artifact-status: final approved planning contract; implementation unstarted.
+- artifact-status: final approved planning contract; implementation and the section 8 correction verified and delivered.
 - capability-research: used; current CLI help/source, complete-runtime adapter,
   real bundle selection, package inventories and existing source/reference
   research establish the available primitives. No claim depends on a new

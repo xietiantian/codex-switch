@@ -46,4 +46,4 @@
 
 - [x] 8.1 Correct the native design/spec and add public init-to-stage RED coverage for released explicit-compatibility state; preserve the actual Desktop resolver and compare saved bindings and resolved reference only to their own snapshots. Run GREEN without rewriting saved official intent.
 - [x] 8.2 Exercise released init output through real native stage/apply/switch/verify with isolated runtime copies and a loopback provider. Cover canonical bindings and independent post-stage manifest, bundle and CLI drift; retain no-Desktop/full-mode and first-install regression gates.
-- [ ] 8.3 Run focused and broad regression, native Spec/Standards review, strict OpenSpec/workflow checks and exact-package installed migration tests. Update evidence and deliver to the existing PR; preserve historical artifacts and the live workstation.
+- [x] 8.3 Run focused and broad regression, native Spec/Standards review, strict OpenSpec/workflow checks and exact-package installed migration tests. Update evidence and deliver to the existing PR; preserve historical artifacts and the live workstation.

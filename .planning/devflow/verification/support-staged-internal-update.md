@@ -352,3 +352,52 @@ by the generated-artifact tool before any contract was issued. The response is
 retained as `artifact-registration-rejected.json`, outside the contract registry;
 it authorizes no cleanup. Verification evidence is retained. Exact package
 output uses the existing pre-creation sealed-contract runner under `dist/`.
+
+### Final correction acceptance and existing-PR delivery
+
+Fresh source discovery passes: 1,252 cases in 1,314.513 seconds, with 13
+conditional skips. Those skips are the ten native staged cases, one native
+parity case, one native lifecycle case and the Python 3.9 transaction case.
+The native cases all pass against the exact installed candidate below; the
+Python 3.9 case passes separately in 0.272 seconds with a system-only PATH.
+The separate Profile/Wrapper script entrypoint passes 227 cases in 415.386
+seconds. No conditional case is counted as passed solely from discovery.
+
+The immutable historical initializer is v0.1.15 at
+`04374d37a0764286567a66fa87da5a9849d286e6`; its locally extracted archive has
+SHA-256 `8892660daac7b85cbdf1a090ced8309d9c9b1c2bf26f545f0f0114de2a91ef82`.
+`CODEX_SWITCH_TEST_RELEASE_ROOT` points to that extraction for source migration
+and installed-package runs, so the corrected implementation does not generate
+its own purported historical fixture.
+
+Exact implementation `c15bb7471106a1e4df9273f9910e66a1893c53c4` is committed
+and pushed to the existing `fix/standalone-installer-runtime` PR branch. Its
+package upgrades from `ef69b01dd21e64d806e35268c4ec48e9f5de0cfc` in private
+HOME/install/lib roots. All 119 installed cases pass with no skips: staged
+update 22, private preparation 14, catalog 26, first install 31, signal cleanup
+11, and native staged/parity/lifecycle 15. The last group passes in 195.305
+seconds using real CLI 0.155.0 and Desktop runtime 0.155.0-alpha.9.2 copies and
+a loopback provider. It includes released init -> stage/current -> apply ->
+public switch -> public verify, with saved official command intent preserved.
+
+Distribution, archive and installed manifests validate before and after tests:
+
+- Payload SHA-256: `c61a2f9c28b51953ff062726b22bb131709dcca269ebfba57ba5eeeb8a43ccfe`.
+- Archive SHA-256: `b57e2bccf35ca314e2f0e99a0e018daab8fb08b59dd79562b0d44ee79fadd402`.
+- Source, distribution and installed Python bytecode files: zero.
+- Local proof: `dist/staged-exact-c15bb7471106/verification.json` and adjacent
+  build/install/test/manifest logs; source logs are in the local proof root above.
+
+All 28 pinned OpenSpec 1.7 strict items, shell syntax, Python 3.9 grammar and
+diff checks pass. Native workflow validation has no issues; the existing
+readiness-heading warning and retained-artifact cleanup warnings remain visible.
+The exact package has a valid pre-creation sealed retain contract and observed
+manifest. No cleanup is attempted. Spec/Standards reviews have no blocking
+findings. The unrelated early-failure ID limitation is classified in the ledger;
+it is not silently changed or claimed fixed by this binding correction.
+
+Native Git transport preflight confirms the previous remote and safe
+fast-forward before push. The subsequent checkpoint changes only execution
+metadata/evidence, not packaged runtime inputs. The active change stays
+unarchived. No live installation, user profile, LaunchAgent, App, external
+provider or release is modified; live Desktop UI acceptance remains unclaimed.
