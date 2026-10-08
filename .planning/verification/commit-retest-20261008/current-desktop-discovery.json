@@ -1,0 +1,14 @@
+{
+  "current": null,
+  "legacy": [],
+  "excluded": [],
+  "findings": [
+    {
+      "code": "desktop.current.cli_invalid",
+      "severity": "error",
+      "message": "ChatGPT Desktop bundled Codex CLI is missing, non-regular, or not executable.",
+      "expected": "",
+      "observed": "/Applications/ChatGPT.app/Contents/Resources/codex"
+    }
+  ]
+}

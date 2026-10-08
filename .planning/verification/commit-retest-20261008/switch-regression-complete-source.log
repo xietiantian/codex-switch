@@ -1,0 +1,16 @@
+.............................Runtime configuration changed; checking current settings with the binding compatibility policy.
+..........................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 279 tests in 224.278s
+
+OK
+Creating switch backup...
+Backup captured: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/store/backups/20261008T084135Z-switch-internal-to-openai-official
+Applying switch mutations...
+Switched to profile openai-official
+Backup: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/store/backups/20261008T084135Z-switch-internal-to-openai-official
+CODEX_HOME: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/official-home
+Shim: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/store/bin/codex
+Shell CLI bootstrap: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/.zshrc
+App CLI: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/Applications/ChatGPT.app/Contents/Resources/codex
+LaunchAgent: /var/folders/9r/ks1b__ps4zb19bw8d1gysg480000gn/T/tmp4juml78c/agent.plist

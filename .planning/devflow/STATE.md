@@ -89,8 +89,10 @@ context_health:
 ## Commit and retest request (2026-10-08)
 
 The requester now authorizes committing the existing repairs and refreshing the
-dependent test package from that exact commit. Source implementation remains
-unchanged; fresh package tests and current-version diagnosis are pending. The
+dependent test package from that exact commit. Implementation is committed as
+`5a6d9fc3a628`; fresh 279-case complete-source and 19-case installed runtime tests
+pass. Current Desktop path discovery and six feature/five protocol differences
+remain unresolved and are documented in `.planning/verification/commit-retest-20261008.md`. The
 historical no-publication statements below describe the earlier repair scope.
 Live workstation changes, new compatibility adaptations and archive remain
 outside this task. See the current task at the top of `TASK_LEDGER.md`.

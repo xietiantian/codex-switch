@@ -1,0 +1,263 @@
+{
+  "policy": "8",
+  "healthy": false,
+  "model_requests": 0,
+  "findings": [
+    {
+      "category": "feature",
+      "code": "parity.feature.configuration_difference",
+      "severity": "warning",
+      "message": "apps: supported user choice; official=true, internal=false.",
+      "expected": "independent-supported-settings",
+      "observed": "false"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.configuration_difference",
+      "severity": "warning",
+      "message": "guardian_approval: supported user choice; official=true, internal=false.",
+      "expected": "independent-supported-settings",
+      "observed": "false"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.configuration_difference",
+      "severity": "warning",
+      "message": "prevent_idle_sleep: supported user choice; official=false, internal=true.",
+      "expected": "independent-supported-settings",
+      "observed": "true"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.core_drift",
+      "severity": "error",
+      "message": "multi_agent_v2: official=false (stage=stable, default=false); internal=true (stage=stable, default=false).",
+      "expected": "projected-v2-and-final-typed-probe",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_drift",
+      "severity": "warning",
+      "message": "guardian_ext: official=false (stage=removed, default=false); internal=false (stage=under development, default=false).",
+      "expected": "reviewed-core-independent-state",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_drift",
+      "severity": "warning",
+      "message": "personality: official=false (stage=removed, default=false); internal=true (stage=stable, default=true).",
+      "expected": "reviewed-core-independent-state",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_drift",
+      "severity": "warning",
+      "message": "realtime_conversation: official=true (stage=stable, default=true); internal=false (stage=experimental, default=false).",
+      "expected": "reviewed-core-independent-state",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_drift",
+      "severity": "warning",
+      "message": "worktrees: official=true (stage=stable, default=true); internal=false (stage=experimental, default=false).",
+      "expected": "reviewed-core-independent-state",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_missing",
+      "severity": "warning",
+      "message": "analytics_plan_history: official=false (stage=experimental, default=false); internal=missing.",
+      "expected": "reviewed-core-independent-state",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_missing",
+      "severity": "warning",
+      "message": "nonfatal_clock_read_errors: optional capability missing in internal; official=false, internal=missing.",
+      "expected": "optional-capability",
+      "observed": "internal=missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_missing",
+      "severity": "warning",
+      "message": "send_message_to_user_async: official=false (stage=under development, default=false); internal=missing.",
+      "expected": "reviewed-core-independent-state",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_missing",
+      "severity": "warning",
+      "message": "use_xaa: official=false (stage=under development, default=false); internal=missing.",
+      "expected": "reviewed-core-independent-state",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.optional_proxy_retry_missing",
+      "severity": "warning",
+      "message": "system_proxy_fallback: internal lacks automatic system-proxy retry after eligible connection failures; remaining checks continue.",
+      "expected": "optional-capability",
+      "observed": "internal=missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "agent_message_board: official=false (stage=under development, default=false); internal=missing.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "daemon_auto_start: official=true (stage=stable, default=true); internal=missing.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "guardian_reuse_parent_compaction: official=true (stage=stable, default=true); internal=false (stage=under development, default=false).",
+      "expected": "classified",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "guardianv2.thread_context: official=true (stage=stable, default=true); internal=false (stage=under development, default=false).",
+      "expected": "classified",
+      "observed": "drift"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "prefer_mxc: official=false (stage=under development, default=false); internal=missing.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "feature",
+      "code": "parity.feature.unclassified_drift",
+      "severity": "error",
+      "message": "transcript_v2: official=false (stage=deprecated, default=false); internal=false (stage=under development, default=false).",
+      "expected": "classified",
+      "observed": "drift"
+    },
+    {
+      "category": "model_metadata",
+      "code": "parity.model.custom_catalog_not_applicable",
+      "severity": "info",
+      "message": "Official model comparison is not applicable to a custom catalog.",
+      "expected": "",
+      "observed": ""
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:thread/queue/add#image_file_reference does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-schema-extension"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:thread/queue/update#image_file_reference does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-schema-extension"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:thread/resume#image_file_reference does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-schema-extension"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:thread/rollback#backend_only_request does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-backend-request"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:turn/start#image_file_reference does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-schema-extension"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_extension",
+      "severity": "warning",
+      "message": "client_request:turn/steer#image_file_reference does not match parity policy.",
+      "expected": "optional-unobserved",
+      "observed": "exact-schema-extension"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.optional_maintenance_missing",
+      "severity": "warning",
+      "message": "rollout/compress: internal lacks the explicit old-session compression trigger; continuing remaining checks.",
+      "expected": "optional-maintenance",
+      "observed": "internal=missing"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.unclassified_drift",
+      "severity": "error",
+      "message": "client_request:account/gatewayOAuth/cancel does not match parity policy.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.unclassified_drift",
+      "severity": "error",
+      "message": "client_request:account/gatewayOAuth/login does not match parity policy.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.unclassified_drift",
+      "severity": "error",
+      "message": "client_request:account/gatewayOAuth/read does not match parity policy.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.unclassified_drift",
+      "severity": "error",
+      "message": "server_notification:account/gatewayOAuth/changed does not match parity policy.",
+      "expected": "classified",
+      "observed": "missing"
+    },
+    {
+      "category": "protocol",
+      "code": "parity.protocol.unclassified_drift",
+      "severity": "error",
+      "message": "server_request:mcpServer/elicitation/request does not match parity policy.",
+      "expected": "classified",
+      "observed": "incompatible"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+official features 150 schema_sha256 d7e52e79d204911a48a75f5b13804feeea9c0eed0b9ec4b384ed07a7210a3b10
+internal features 142 schema_sha256 a4ae6ff849a41784bfcc954b209637d79369e09f306ad32580b81d4abd40134d
+feature parity.feature.core_drift multi_agent_v2: official=false (stage=stable, default=false); internal=true (stage=stable, default=false).
+feature parity.feature.unclassified_drift agent_message_board: official=false (stage=under development, default=false); internal=missing.
+feature parity.feature.unclassified_drift daemon_auto_start: official=true (stage=stable, default=true); internal=missing.
+feature parity.feature.unclassified_drift guardian_reuse_parent_compaction: official=true (stage=stable, default=true); internal=false (stage=under development, default=false).
+feature parity.feature.unclassified_drift guardianv2.thread_context: official=true (stage=stable, default=true); internal=false (stage=under development, default=false).
+feature parity.feature.unclassified_drift prefer_mxc: official=false (stage=under development, default=false); internal=missing.
+feature parity.feature.unclassified_drift transcript_v2: official=false (stage=deprecated, default=false); internal=false (stage=under development, default=false).
+protocol parity.protocol.unclassified_drift client_request:account/gatewayOAuth/cancel does not match parity policy.
+protocol parity.protocol.unclassified_drift client_request:account/gatewayOAuth/login does not match parity policy.
+protocol parity.protocol.unclassified_drift client_request:account/gatewayOAuth/read does not match parity policy.
+protocol parity.protocol.unclassified_drift server_notification:account/gatewayOAuth/changed does not match parity policy.
+protocol parity.protocol.unclassified_drift server_request:mcpServer/elicitation/request does not match parity policy.

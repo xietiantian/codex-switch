@@ -10,8 +10,13 @@
 - Keep generated packages, historical local test trees and unrelated research
   untracked. No live configuration, authentication, Desktop activation, release
   or archive action is required.
-- Commit preparation is complete; fresh exact-commit test results will be
-  recorded after packaging. Earlier verification below remains historical.
+- Source committed as `5a6d9fc3a628`. Fresh complete-source regression passes
+  279 tests; the installed package passes 19 focused/native runtime tests and
+  policy-6 upgrade with valid manifests. Both active OpenSpec changes validate.
+- Current Desktop discovery still uses the obsolete bundled CLI path. Direct
+  offline inventories of the original App CLI confirm six unclassified feature
+  differences and five protocol differences. No new compatibility repair was
+  implemented. Evidence: `.planning/verification/commit-retest-20261008.md`.
 
 ## Active Change: Optional runtime parity differences
 
