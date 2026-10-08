@@ -1153,7 +1153,7 @@ class ProtocolAdapterTests(unittest.TestCase):
             self.assertTrue(
                 probe_config_write_capability(
                     backend,
-                    timeout_seconds=1.0,
+                    timeout_seconds=5.0,
                 )
             )
 
@@ -1438,13 +1438,15 @@ class ProtocolAdapterTests(unittest.TestCase):
                             with self.assertRaises(SwitchError):
                                 generate_app_server_schema(
                                     backend,
-                                    timeout_seconds=1.0,
+                                    # Leave enough time to launch and record the child
+                                    # under a full-suite load before exercising cleanup.
+                                    timeout_seconds=5.0,
                                 )
                         else:
                             self.assertIsNone(
                                 probe_config_write_capability(
                                     backend,
-                                    timeout_seconds=1.0,
+                                    timeout_seconds=5.0,
                                 )
                             )
                     pid_deadline = time.monotonic() + 1.0

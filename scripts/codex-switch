@@ -50,7 +50,7 @@ One-key commands:
   version                  Print codex-switch version.
 
 Pass-through commands:
-  init | capture | switch | restore | status | list | doctor | repair-plugins | sync-shared | verify | shim-env
+  init | capture | switch | restore | status | list | doctor | repair-plugins | sync-shared | verify | verify-app-launch | shim-env
   login-internal | login-official
   login | set-bin | set-app-bin
   raw <codex_profile_switch.py args...>
@@ -3049,7 +3049,7 @@ case "$cmd" in
   login-official)
     run_switcher login openai-official "$@"
     ;;
-  init|capture|switch|restore|status|list|doctor|repair-plugins|sync-shared|verify|shim-env|login|set-bin|set-app-bin)
+  init|capture|switch|restore|status|list|doctor|repair-plugins|sync-shared|verify|verify-app-launch|shim-env|login|set-bin|set-app-bin)
     run_switcher "$cmd" "$@"
     ;;
   raw)

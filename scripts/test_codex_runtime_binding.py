@@ -32,6 +32,7 @@ from codex_switch_bindings import (
 from codex_switch_doctor_active import active_profile_problems
 from codex_switch_lifecycle import cmd_init
 from codex_switch_home_sync import build_internal_home_config
+from codex_switch_runtime_config import runtime_compatibility_digest
 from codex_switch_parity import (
     ConfigInputs,
     prepare_parity_config_projection,
@@ -714,6 +715,7 @@ class RuntimeBindingTests(unittest.TestCase):
                         projected_payloads["active_runtime_config"]
                     ).hexdigest(),
                 ),
+                ("runtime_semantics_v1", runtime_compatibility_digest(projected_payloads["active_runtime_config"])),
             ),
             manifest_metadata=manifest_metadata,
         )
@@ -3255,6 +3257,78 @@ class RuntimeBindingTests(unittest.TestCase):
             }
             self.assertEqual(expected, desktop_contract)
             self.assertEqual(expected, shell_contract)
+
+    def test_internal_launch_accepts_bookkeeping_without_restoring_removed_market(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store, backend, launcher, _ = self.write_internal_store_fixture(root)
+            self.write_rebind_backend(backend, runtime_label="bound")
+            home = store.internal_codex_home
+            shell = write_codex_shim(store, str(backend), home)
+            with self.prepared_parity_rebind(root, store, generation="bound"), redirect_stdout(io.StringIO()):
+                cmd_set_bin(self.rebind_args(store, backend))
+            config = home / "config.toml"
+            config.write_text(config.read_text() + '\n[hooks.state.example]\ntrusted=true\n[marketplaces.kept]\nsource="local"\n')
+            (home / "internal.plugin-support.config.toml").write_text('[marketplaces.deleted]\nsource="old"\n')
+            live = store.official_codex_home / "config.toml"
+            live.write_text(live.read_text() + '\n[marketplaces.deleted]\nsource="old"\n')
+            auth = home / "auth.json"
+            auth.write_text('{"OPENAI_API_KEY":"synthetic"}')
+            auth_before = auth.read_bytes()
+
+            receipt_before = (store.profile_dir("internal") / "parity/receipt.json").read_bytes()
+            for executable in (launcher, shell):
+                result = self.run_runtime_contract(executable)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("marketplaces.kept", config.read_text())
+            self.assertNotIn("marketplaces.deleted", config.read_text())
+            self.assertEqual(auth.read_bytes(), auth_before)
+            self.assertEqual(receipt_before, (store.profile_dir("internal") / "parity/receipt.json").read_bytes())
+
+    def test_changed_runtime_uses_existing_preparation_and_preserves_failed_input(self):
+        from codex_switch_runtime_config import ensure_internal_runtime_generation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store, backend, launcher, _ = self.write_internal_store_fixture(root)
+            self.write_rebind_backend(backend, runtime_label="bound")
+            with self.prepared_parity_rebind(root, store, generation="bound"), redirect_stdout(io.StringIO()):
+                cmd_set_bin(self.rebind_args(store, backend))
+            config = store.internal_codex_home / "config.toml"
+            config.write_text(config.read_text() + '\n[unknown]\nvalue=true\n')
+            before = config.read_bytes()
+            receipt = store.profile_dir("internal") / "parity/receipt.json"
+            receipt_before = receipt.read_bytes()
+            with patch.object(bindings_module, "cmd_set_bin", side_effect=SwitchError("specific preparation failure")) as prepare:
+                with self.assertRaisesRegex(SwitchError, "specific preparation failure"):
+                    ensure_internal_runtime_generation(store_root=store.root, fallback_home=store.internal_codex_home, launcher_path=launcher)
+            self.assertEqual(prepare.call_count, 1)
+            self.assertEqual(prepare.call_args.args[0].official_codex_home, Path.home() / ".codex")
+            self.assertNotEqual(prepare.call_args.args[0].official_codex_home, store.internal_codex_home)
+            self.assertNotEqual(prepare.call_args.args[0].rebind_private_inputs.source_home, store.internal_codex_home.resolve())
+            self.assertEqual(config.read_bytes(), before)
+            self.assertEqual(receipt.read_bytes(), receipt_before)
+
+    def test_runtime_refresh_rejects_manifest_changed_after_artifact_validation(self):
+        import codex_switch_runtime_binding as runtime
+        from codex_switch_runtime_config import ensure_internal_runtime_generation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store, backend, launcher, _ = self.write_internal_store_fixture(root)
+            self.write_rebind_backend(backend, runtime_label="bound")
+            with self.prepared_parity_rebind(root, store, generation="bound"), redirect_stdout(io.StringIO()):
+                cmd_set_bin(self.rebind_args(store, backend))
+            config = store.internal_codex_home / "config.toml"
+            config.write_text(config.read_text() + '\n[unknown]\nvalue=true\n')
+            original = runtime.validate_internal_runtime_generation
+            def validate(**kwargs):
+                result = original(**kwargs)
+                manifest = store.manifest_path("internal")
+                manifest.write_bytes(manifest.read_bytes() + b"\n")
+                return result
+            with patch.object(runtime, "validate_internal_runtime_generation", side_effect=validate), patch.object(bindings_module, "cmd_set_bin") as prepare:
+                with self.assertRaisesRegex(SwitchError, "generation changed"):
+                    ensure_internal_runtime_generation(store_root=store.root, fallback_home=store.internal_codex_home, launcher_path=launcher)
+                prepare.assert_not_called()
 
     def test_internal_launch_rejects_runtime_config_digest_drift_before_backend(
         self,

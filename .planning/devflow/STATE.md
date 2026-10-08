@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: completed
+current_stage: complete
 
 current_change:
-  id: support-staged-internal-update
-  status: completed
+  id: revalidate-runtime-config-at-launch
+  status: complete
 
 standing_milestone:
   status: inactive
@@ -41,13 +41,13 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-24-released-binding-correction-delivered
-  last_checkpoint_file: .planning/devflow/verification/support-staged-internal-update.md
+  last_checkpoint_id: 2026-09-29-runtime-config-launch
+  last_checkpoint_file: openspec/changes/revalidate-runtime-config-at-launch/review-evidence.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-09-24
+  compact_updated_at: 2026-09-29
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -69,24 +69,39 @@ context_management:
     - validation_recorded_if_applicable
 
 goal_gate:
-  id: support-staged-internal-update
-  required: true
-  status: complete
-  reason: released explicit binding migration is verified in source and exact installed package and delivered to the existing PR
+  id: none
+  required: false
+  status: durable_contract
+  reason: bounded authorized source repair uses current OpenSpec tasks and evidence; no runtime goal requested
   suggested_goal: none
 
 context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: verified_released_binding_correction_delivered_to_existing_pr
+  last_decision: approved_config_launch_repair_only_new_desktop_adaptation_excluded
   last_goal_status: aligned
-  goal_summary: Deliver durable stage and private transactional apply with source provenance, recovery, isolated proof and existing PR delivery.
+  goal_summary: Complete approved policy 8 runtime configuration launch repair and isolated verification.
 ---
 
 # Workflow State
 
-## Active Staged Update Plan
+## Commit and retest request (2026-10-08)
+
+The requester now authorizes committing the existing repairs and refreshing the
+dependent test package from that exact commit. Source implementation remains
+unchanged; fresh package tests and current-version diagnosis are pending. The
+historical no-publication statements below describe the earlier repair scope.
+Live workstation changes, new compatibility adaptations and archive remain
+outside this task. See the current task at the top of `TASK_LEDGER.md`.
+
+Current approved execution: `revalidate-runtime-config-at-launch/tasks.md`. All six source/isolated-verification tasks are complete. Final Profile/Wrapper 227, Update/Release 200, boundary 10 and installed 26 checks pass; both review axes are closed. Strict OpenSpec and diff checks pass. Evidence: `.planning/verification/runtime-config-launch-20260929.md`. Previous optional repair remains intact. New Desktop packaging and capability adaptation is explicitly excluded; no live readiness, publication or archive is claimed or authorized.
+
+## Current Optional Runtime Parity Repair
+
+Approved policy 7 optional system-proxy retry handling and the two protocol-test startup budgets are implemented. Fresh regression passes 187 cases; repeated timing checks pass 6; exact installed runtime checks pass 17 with valid manifests and no bytecode. Strict OpenSpec and diff checks pass. Spec review found no code blocker; stale documentation is corrected. No caller-specific evidence belongs here. No live installation, Git publication or archive is authorized.
+
+## Previous Staged Update Plan
 
 New change: `support-staged-internal-update`; baseline `956197209b2d`.
 Native proposal/design/tasks and three capability delta specs are written.
@@ -105,7 +120,7 @@ release, destructive cleanup or unrelated workflow update is authorized.
 Main owns final planning/integration and the runtime Goal, if used; the durable
 Goal Contract is in the design. No external implementation provider is selected.
 
-## Current Next Action
+## Previous Staged Update Next Action
 
 No implementation remains for approved section 8. Preserve the verified package
 and released-init migration evidence. Saved intent and actual Desktop reference

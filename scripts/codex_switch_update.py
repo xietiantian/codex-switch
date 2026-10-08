@@ -309,7 +309,7 @@ def select_target(args, store):
 def public_record(record):
     keys = ("schema_version", "update_id", "state", "runtime_path", "actual_version",
             "runtime_digest", "source", "desktop_reference", "profile_present",
-            "internal_app_bound", "reason", "message", "transaction_id", "scope")
+            "internal_app_bound", "reason", "message", "transaction_id", "scope", "diagnostics")
     result = {key: record[key] for key in keys if key in record}
     result["safe_to_restore"] = record.get("state") in {"staged", "failed", "stale", "cancelled"}
     return result
@@ -564,6 +564,7 @@ def apply_update(args, store):
     from codex_switch_bindings import (PrivateRuntimePreparation, cmd_set_bin,
                                        _verify_internal_update_promotion)
     from codex_switch_transaction import RuntimeBindingExecutableSwap
+    from codex_switch_parity import parity_diagnostics
     root = update_root(store, args.update_id)
     with record_lock(root):
         record = read_record(root / "record.json")
@@ -630,13 +631,23 @@ def apply_update(args, store):
                 frozen_input_validator=lambda: require_frozen(store, record, args.from_codex_home, inputs),
                 allow_absent_profile=not record["profile_present"],
             )
+            def validate_prepared(result):
+                _verify_internal_update_promotion(
+                    store, result=result, executable_swap=swap,
+                    target_version=record["actual_version"])
+                diagnostics = parity_diagnostics(result.parity_bundle.findings)
+                if diagnostics:
+                    record["diagnostics"] = diagnostics
+                    # Persist before the transaction commits so interrupted
+                    # responses and status/replay retain the same warnings.
+                    atomic_json(root / "record.json", record)
+
             rebind_options = dict(vars(args))
             rebind_options.update(name="internal", codex_bin=str(target),
                 preserve_app_cli=False, rebind_private_inputs=preparation,
                 rebind_execution_codex_bin=str(candidate), rebind_executable_swap=swap,
                 rebind_retire_executable_backup=swap is not None, suppress_rebind_success_output=True,
-                rebind_prepared_validator=lambda result: _verify_internal_update_promotion(
-                    store, result=result, executable_swap=swap, target_version=record["actual_version"]))
+                rebind_prepared_validator=validate_prepared)
             rebind_args = SimpleNamespace(**rebind_options)
             result = cmd_set_bin(rebind_args)
             receipt = getattr(result, "terminal_receipt", None)
@@ -654,6 +665,9 @@ def apply_update(args, store):
             else:
                 record["state"] = "stale" if getattr(exc, "reason", "") == "stale" else "failed"
             record.update(reason=getattr(exc, "reason", "apply_failed"), message=str(exc))
+            diagnostics = parity_diagnostics(getattr(exc, "findings", ()))
+            if diagnostics:
+                record["diagnostics"] = diagnostics
             atomic_json(root / "record.json", record)
             raise
 

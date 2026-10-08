@@ -105,8 +105,50 @@ back to default data. Generated overlays retain their custom or default origin,
 and default sources are selected afresh on repeat updates. Feature inventories
 support dot-separated names such as `guardianv2.thread_context`; these remain
 complete identifiers subject to the same compatibility policy as flat names.
+The reviewed absence of `system_proxy_fallback` in internal is optional when
+reference reports stage `stable` and default `true`, for either effective value.
+It reports unavailable automatic system-proxy retry after eligible connection
+failures. Explicit candidate requests, core dependencies, changed definitions,
+and actual connection/configuration failures remain blocking. These rules were
+introduced in policy 7 and are retained by the current policy 8.
+
 Malformed rows and unclassified feature differences still block promotion.
-Existing receipts from the previous policy require fresh preparation. For a controlled switch
+Supported `apps`, `guardian_approval`, and `prevent_idle_sleep` choices may differ
+when stage/default metadata matches; actual CLI configuration and core checks
+still apply. Missing `nonfatal_clock_read_errors` is an optional capability
+regardless of the official setting, but explicitly enabling it in candidate
+config requires internal support. Missing `rollout/compress` is a warning about
+the explicit old-session compression trigger; validation does not call this RPC.
+Unknown methods, observed core dependencies, and other schema drift still fail.
+`enable_fanout` and other removed-flag policy is unchanged.
+
+Policy 8 binds launch compatibility evidence to parsed runtime settings. Changes
+to marketplaces, plugins, skills, TUI/history, hook trust records or project trust
+do not by themselves invalidate that evidence. The managed launcher preserves
+the current runtime config and authentication file; it does not refill deleted
+settings from old support snapshots or the shared home. Config syntax and native
+loading errors still fail.
+
+Changing model/provider/features or other compatibility settings triggers the
+same preparation policy and bounded native probes used by binding. The refresh
+captures config/auth privately and publishes a healthy generation atomically;
+failed preparation preserves the user input. This may take as long as an initial
+bind. Binary, launcher, capability receipt and catalog integrity remain checked.
+Legacy receipts without semantic evidence require fresh preparation after edits.
+
+`codex-switch verify-app-launch internal` explicitly checks the real managed
+launcher and actual runtime home using initialize and plugin/list. It makes no
+model turn itself; changed runtime inputs may trigger the preparation above.
+This is separate from `verify --app-server-smoke`, which intentionally uses an
+isolated home and staged-launch bypass. Neither command proves foreground UI
+acceptance or account-service availability.
+
+Staged apply/status/replay expose bounded, redacted `diagnostics` (category, code,
+severity, message, expected, observed), including warnings after successful apply.
+Compatibility failures use `reason=compatibility_check_failed` and name the
+feature/method instead of reporting repeated codes alone. Diagnostics do not
+change transaction outcome or recovery policy. Existing receipts from an earlier
+policy require fresh preparation. For a controlled switch
 that keeps both currently installed versions, use
 `codex-switch split --keep-version`. This option does not skip Plugin repair,
 verify, Doctor, status, App-effect derivation, transaction validation, or the

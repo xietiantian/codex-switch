@@ -921,7 +921,7 @@ def build_internal_home_config(
             / "openai-official"
             / plugin_support_snapshot_name("openai-official"),
         ],
-        shared_source_text_override=shared_source_text_override,
+        shared_source_text_override="" if private_profile_seed else shared_source_text_override,
         profile_seed_text_override=profile_seed_text_override,
     )
 
@@ -1091,6 +1091,8 @@ def sync_profile_app_home_for_launch(
     app_home: Path,
     profile_config: Path,
     profile_name: str,
+    *,
+    preserve_runtime_settings: bool = False,
 ) -> tuple[Path, ...]:
     live_config = live_home / "config.toml"
     app_config = app_home / "config.toml"
@@ -1123,13 +1125,20 @@ def sync_profile_app_home_for_launch(
             f"launcher shared config: {live_config}",
         )
 
-    target_config_text = build_internal_home_config(
-        live_home,
-        profile_name,
-        app_config,
-        profile_config,
-        shared_source_text_override=updated_live_text,
-    )
+    if preserve_runtime_settings:
+        if profile_name != "internal" or app_text is None:
+            raise SwitchError("A materialized internal runtime is required for launch synchronization.")
+        # The materialized runtime is the user's current input. Importing
+        # missing keys from the live home resurrects deliberately deleted data.
+        target_config_text = app_text
+    else:
+        target_config_text = build_internal_home_config(
+            live_home,
+            profile_name,
+            app_config,
+            profile_config,
+            shared_source_text_override=updated_live_text,
+        )
     if (
         profile_name == "internal"
         and app_text is not None
@@ -1144,7 +1153,7 @@ def sync_profile_app_home_for_launch(
     snapshot_text = build_profile_plugin_support_snapshot_text(
         profile_name,
         target_config_text,
-        snapshot_paths,
+        [] if preserve_runtime_settings else snapshot_paths,
     )
     desktop_writes = _plan_bidirectional_desktop_state_writes(
         live_home,
@@ -1173,16 +1182,21 @@ def sync_profile_app_home_for_launch(
     for write in desktop_writes:
         atomic_write(write.path, write.payload, mode=write.mode)
         mutated.append(write.path)
-    if app_text is not None:
+    same_config = app_config.resolve() == live_config.resolve()
+    if (app_text is not None and updated_live_text != live_text
+            and not (preserve_runtime_settings and same_config)):
         atomic_write(live_config, updated_live_text.encode(), mode=0o600)
         mutated.append(live_config)
-    atomic_write(app_config, target_config_text.encode(), mode=0o600)
-    mutated.append(app_config)
+    if not preserve_runtime_settings and (
+        target_config_text != app_text or same_config and updated_live_text != target_config_text
+    ):
+        atomic_write(app_config, target_config_text.encode(), mode=0o600)
+        mutated.append(app_config)
     for snapshot_path in unique_paths(snapshot_paths):
         atomic_write(snapshot_path, snapshot_text.encode(), mode=0o600)
         mutated.append(snapshot_path)
     auth_path = app_home / "auth.json"
-    if auth_path.exists() or auth_path.is_symlink():
+    if not preserve_runtime_settings and (auth_path.exists() or auth_path.is_symlink()):
         remove_path(auth_path)
         mutated.append(auth_path)
     return tuple(mutated)
@@ -1196,6 +1210,7 @@ def main(argv: list[str]) -> int:
     prepare.add_argument("--app-home", required=True)
     prepare.add_argument("--profile-config", required=True)
     prepare.add_argument("--profile-name", required=True)
+    prepare.add_argument("--preserve-runtime-settings", action="store_true")
     args = parser.parse_args(argv[1:])
     try:
         if args.command == "prepare-launch":
@@ -1204,6 +1219,7 @@ def main(argv: list[str]) -> int:
                 Path(args.app_home).expanduser(),
                 Path(args.profile_config).expanduser(),
                 str(args.profile_name),
+                preserve_runtime_settings=args.preserve_runtime_settings,
             )
             return 0
     except (OSError, SwitchError) as exc:

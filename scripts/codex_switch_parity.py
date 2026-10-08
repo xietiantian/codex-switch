@@ -29,6 +29,7 @@ from codex_switch_protocol_adapter import (
     protocol_adapter_rule_manifest,
     protocol_adapter_rule_set_digest,
 )
+from codex_switch_runtime_config import runtime_compatibility_digest
 from codex_switch_runtime_binding import (
     CURRENT_CHATGPT_BUNDLE_ID,
     ChatGPTDesktopHost,
@@ -36,7 +37,7 @@ from codex_switch_runtime_binding import (
 )
 
 
-PARITY_POLICY_VERSION = "5"
+PARITY_POLICY_VERSION = "8"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -192,9 +193,13 @@ _PARITY_CLASSIFICATION_TABLES: Mapping[str, Mapping[str, object]] = (
 
 
 class ParityValidationError(SwitchError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self, code: str, message: str, *, findings: tuple[ParityFinding, ...] = (),
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.findings = findings
+        self.reason = "compatibility_check_failed" if findings else "invalid"
 
 
 def _require_text(value: str, *, code: str, field_name: str) -> None:
@@ -4915,6 +4920,27 @@ def _sanitize_parity_probe_text(text: str, *, max_bytes: int) -> str:
     return payload[:max_bytes].decode("utf-8", errors="ignore")
 
 
+def parity_diagnostics(findings: tuple[ParityFinding, ...]) -> list[dict[str, str]]:
+    """Expose only bounded, redacted findings, without inventories or probe payloads."""
+    diagnostics = []
+    # Show blocking findings before optional warnings when the response is capped.
+    for severity in ("error", "warning"):
+        for finding in findings:
+            if not isinstance(finding, ParityFinding) or finding.severity != severity:
+                continue
+            item = {}
+            for key in ("category", "code", "severity", "message", "expected", "observed"):
+                value = getattr(finding, key)
+                if isinstance(value, str):
+                    item[key] = _sanitize_parity_probe_text(
+                        value, max_bytes=2048 if key == "message" else 512,
+                    )
+            diagnostics.append(item)
+            if len(diagnostics) == 64:
+                return diagnostics
+    return diagnostics
+
+
 def _probe_json_lines(stdout: str) -> tuple[Mapping[str, object], ...] | None:
     messages: list[Mapping[str, object]] = []
     for line in stdout.splitlines():
@@ -8605,15 +8631,16 @@ def _raise_unhealthy_preparation(
     code: str,
     findings: tuple[ParityFinding, ...],
 ) -> None:
-    finding_codes = ", ".join(
-        finding.code
-        for finding in findings
-        if finding.severity == "error"
+    details = "; ".join(
+        f"{item['code']}: {item['message']}"
+        for item in parity_diagnostics(findings)
+        if item["severity"] == "error"
     )
-    suffix = f": {finding_codes}" if finding_codes else ""
+    suffix = f": {details}" if details else ""
     raise ParityValidationError(
         code,
         f"Parity preparation is unhealthy{suffix}",
+        findings=findings,
     )
 
 
@@ -8946,6 +8973,12 @@ def prepare_parity_bundle(
             runtime_payload,
             overlay_path=probe_overlay_path,
         ))
+        configured_features = ConfigDocument.parse(
+            probe_config_payload.decode("utf-8"), "candidate parity config",
+        ).data.get("features", {})
+        requested_internal_features = frozenset(
+            name for name, enabled in configured_features.items() if enabled is True
+        ) if isinstance(configured_features, Mapping) else frozenset()
         _write_private_staged_payload(
             probe_overlay_path,
             overlay.overlay_payload,
@@ -9016,6 +9049,7 @@ def prepare_parity_bundle(
             internal_model_metadata=internal_model_metadata,
             method_coverage=method_coverage,
             evaluation_stage="eligibility",
+            requested_internal_features=requested_internal_features,
             acceptance_trace=acceptance_trace,
             multi_agent_v2_evidence=MultiAgentV2Evidence(
                 overlay_projected=True,
@@ -9078,6 +9112,7 @@ def prepare_parity_bundle(
             internal_model_metadata=internal_model_metadata,
             method_coverage=method_coverage,
             evaluation_stage="final",
+            requested_internal_features=requested_internal_features,
             acceptance_trace=acceptance_trace,
             multi_agent_v2_evidence=MultiAgentV2Evidence(
                 overlay_projected=True,
@@ -9129,6 +9164,7 @@ def prepare_parity_bundle(
             ).hexdigest(),
         ),
         ("runtime", hashlib.sha256(runtime_payload).hexdigest()),
+        ("runtime_semantics_v1", runtime_compatibility_digest(runtime_payload)),
     )
     canonical_internal_binding = candidate.canonical_internal_binding
     if canonical_internal_binding is None:
@@ -9843,6 +9879,11 @@ def load_parity_receipt_artifact(
 
 
 # Reviewed empty-home states for the local text/typed-agent core contract.
+_USER_CHOICE_FEATURES = frozenset({
+    "apps", "guardian_approval", "prevent_idle_sleep", "nonfatal_clock_read_errors",
+})
+_OPTIONAL_CAPABILITY_FEATURES = frozenset({"nonfatal_clock_read_errors", "system_proxy_fallback"})
+
 _REVIEWED_FEATURE_PAIRS = MappingProxyType({
     "analytics_plan_history": (
         FeatureRecord(
@@ -10042,6 +10083,7 @@ def evaluate_parity_policy(
     acceptance_trace: ParityAcceptanceTrace | None = None,
     observed_protocol_methods: frozenset[tuple[str, str]] = frozenset(),
     observed_features: frozenset[str] = frozenset(),
+    requested_internal_features: frozenset[str] = frozenset(),
     method_coverage: tuple[MethodCoverageRecord, ...] = (),
     evaluation_stage: str = "final",
     multi_agent_v2_evidence: MultiAgentV2Evidence | None = None,
@@ -10158,6 +10200,7 @@ def evaluate_parity_policy(
     try:
         observed_protocol = frozenset(observed_protocol_methods)
         observed_feature_names = frozenset(observed_features)
+        requested_feature_names = frozenset(requested_internal_features)
     except TypeError as exc:
         raise ParityValidationError(
             "parity.policy.input_invalid",
@@ -10173,7 +10216,7 @@ def evaluate_parity_policy(
     ) or any(
         not isinstance(name, str)
         or _FEATURE_NAME_RE.fullmatch(name) is None
-        for name in observed_feature_names
+        for name in observed_feature_names | requested_feature_names
     ):
         raise ParityValidationError(
             "parity.policy.input_invalid",
@@ -10194,6 +10237,15 @@ def evaluate_parity_policy(
     assert isinstance(metadata_optional_features, frozenset)
 
     findings: list[ParityFinding] = []
+    supported_internal_features = {
+        entry.name for entry in feature_comparison.entries if entry.internal is not None
+    }
+    for name in sorted((requested_feature_names & _OPTIONAL_CAPABILITY_FEATURES) - supported_internal_features):
+        findings.append(ParityFinding(
+            category="feature", code="parity.config.unsupported_feature", severity="error",
+            message=f"{name}: candidate configuration enables a feature unsupported by internal.",
+            expected="supported-by-internal", observed="enabled-but-missing",
+        ))
     queue: list[ParityQueueItem] = []
     provisional_capabilities: list[str] = []
     coverage_by_key = {
@@ -10289,6 +10341,20 @@ def evaluate_parity_policy(
                 )
             )
             continue
+        if (
+            key == ("client_request", "rollout/compress")
+            and entry.official is not None and entry.internal is None
+            and key not in observed_protocol
+            and not any(extension[:2] == key for extension in observed_extensions)
+        ):
+            code = "parity.protocol.optional_maintenance_missing"
+            findings.append(ParityFinding(
+                category="protocol", code=code, severity="warning",
+                message="rollout/compress: internal lacks the explicit old-session compression trigger; continuing remaining checks.",
+                expected="optional-maintenance", observed="internal=missing",
+            ))
+            queue.append(ParityQueueItem(category="protocol", identifier=identifier, finding_code=code))
+            continue
         if key in optional_protocol:
             if key in observed_protocol:
                 code = (
@@ -10377,6 +10443,44 @@ def evaluate_parity_policy(
         if drift is None:
             continue
         name = entry.name
+        if (
+            name in _OPTIONAL_CAPABILITY_FEATURES
+            and name not in observed_feature_names
+            and name not in requested_feature_names
+            and entry.official is not None and entry.internal is None
+            and (name != "system_proxy_fallback" or (
+                entry.official.stage == "stable" and entry.official.isolated_default is True
+            ))
+        ):
+            proxy_retry = name == "system_proxy_fallback"
+            code = "parity.feature.optional_proxy_retry_missing" if proxy_retry else "parity.feature.optional_missing"
+            message = (f"{name}: internal lacks automatic system-proxy retry after eligible connection failures; remaining checks continue."
+                       if proxy_retry else f"{name}: optional capability missing in internal; official={str(entry.official.effective_state).lower()}, internal=missing.")
+            findings.append(ParityFinding(
+                category="feature", code=code, severity="warning",
+                message=message,
+                expected="optional-capability", observed="internal=missing",
+            ))
+            queue.append(ParityQueueItem(category="feature", identifier=name, finding_code=code))
+            continue
+        if (
+            name in _USER_CHOICE_FEATURES
+            and name not in observed_feature_names
+            and entry.official is not None
+            and entry.internal is not None
+            and entry.official.stage == entry.internal.stage
+            and entry.internal.stage != "removed"
+            and entry.official.isolated_default == entry.internal.isolated_default
+        ):
+            official_state = str(entry.official.effective_state).lower()
+            internal_state = str(entry.internal.effective_state).lower()
+            findings.append(ParityFinding(
+                category="feature", code="parity.feature.configuration_difference",
+                severity="warning",
+                message=f"{name}: supported user choice; official={official_state}, internal={internal_state}.",
+                expected="independent-supported-settings", observed=internal_state,
+            ))
+            continue
         reviewed_pair = _REVIEWED_FEATURE_PAIRS.get(name)
         if reviewed_pair is not None and (
             entry.official, entry.internal
@@ -10650,6 +10754,25 @@ def evaluate_parity_policy(
             )
         )
 
+    # Inventory values are safe structured metadata. Include them in blocking
+    # diagnostics rather than exposing a whole configuration or probe transcript.
+    def feature_state(record: FeatureRecord | None) -> str:
+        if record is None:
+            return "missing"
+        return (f"{str(record.effective_state).lower()} "
+                f"(stage={record.stage}, default={str(record.isolated_default).lower()})")
+
+    feature_details = {
+        f"{entry.name} does not match parity policy.":
+            f"{entry.name}: official={feature_state(entry.official)}; internal={feature_state(entry.internal)}."
+        for entry in feature_comparison.entries
+    }
+    findings = [
+        replace(finding, message=feature_details[finding.message])
+        if finding.category == "feature" and finding.message in feature_details
+        else finding for finding in findings
+    ]
+
     if custom_model_catalog:
         findings.append(
             ParityFinding(
@@ -10915,6 +11038,7 @@ __all__ = [
     "evaluate_parity_policy",
     "load_parity_receipt_artifact",
     "parity_error_report",
+    "parity_diagnostics",
     "prepare_parity_bundle",
     "prepare_parity_bundle_artifacts",
     "prepare_parity_config_projection",

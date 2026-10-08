@@ -410,6 +410,41 @@ class StagedEngineIntegrationTests(unittest.TestCase):
                 with self.assertRaisesRegex(update.UpdateError, "different inputs"):
                     update.apply_update(args, store)
 
+    def test_optional_diagnostics_survive_apply_status_and_replay(self):
+        from codex_switch_parity import ParityFinding
+        with self.prepared_update() as (update, store, args, _record, prepare):
+            original = prepare.side_effect
+            def reporting(*values, **keywords):
+                bundle = original(*values, **keywords)
+                bundle.findings = (ParityFinding(
+                    category="protocol", code="parity.protocol.optional_maintenance_missing",
+                    severity="warning", message="rollout/compress: optional maintenance unavailable.",
+                    expected="optional-maintenance", observed="internal=missing"),)
+                return bundle
+            prepare.side_effect = reporting
+            result = update.apply_update(args, store)
+            self.assertEqual(result["state"], "applied")
+            self.assertIn("rollout/compress", result["diagnostics"][0]["message"])
+            self.assertEqual(result["diagnostics"], update.status(args, store)["diagnostics"])
+            self.assertEqual(result["diagnostics"], update.apply_update(args, store)["diagnostics"])
+
+    def test_failed_preparation_preserves_named_compatibility_diagnostics(self):
+        from codex_switch_parity import ParityFinding, ParityValidationError
+        with self.prepared_update() as (update, store, args, _record, prepare):
+            before = Path(args.internal_bin).read_bytes()
+            prepare.side_effect = ParityValidationError(
+                "parity.preparation.policy_unhealthy", "Parity preparation failed",
+                findings=(ParityFinding(category="feature", code="parity.feature.core_drift",
+                    severity="error", message="enable_fanout: official=false, internal=true."),))
+            with self.assertRaises(ParityValidationError):
+                update.apply_update(args, store)
+            result = update.status(args, store)
+            self.assertEqual(result["reason"], "compatibility_check_failed")
+            self.assertEqual(result["state"], "failed")
+            self.assertTrue(result["safe_to_restore"])
+            self.assertIn("enable_fanout", result["diagnostics"][0]["message"])
+            self.assertEqual(Path(args.internal_bin).read_bytes(), before)
+
     def test_staged_first_full_apply_keeps_retained_runtime_and_publishes_profile(self):
         with self.prepared_update(staged=True, first=True) as (update, store, args, record, _prepare):
             self.assertFalse(store.profile_dir("internal").exists())

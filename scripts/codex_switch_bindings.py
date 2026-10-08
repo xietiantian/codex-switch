@@ -327,8 +327,8 @@ class PrivateRuntimePreparation:
     """Validated private apply context, never populated by public CLI arguments."""
     candidate_manifest: Mapping[str, object]
     source_home: Path | None
-    update_id: str
-    input_fingerprint: str
+    update_id: str | None
+    input_fingerprint: str | None
     frozen_input_validator: Callable[[], None]
     allow_absent_profile: bool = False
 

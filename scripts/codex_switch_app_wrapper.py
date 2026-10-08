@@ -131,9 +131,10 @@ def write_profile_app_wrapper(
         generation_validation = r"""
 "$PYTHON_BIN" -B \
   "$SWITCH_SCRIPTS/codex_switch_runtime_binding.py" \
-  validate-internal-generation \
+  validate-internal-generation --refresh-config \
   --store-root "$STORE_ROOT" \
   --fallback-home "$APP_CODEX_HOME" \
+  --official-home "$OFFICIAL_CODEX_HOME" \
   --launcher-path "$0" \
   --expected-backend "$CODEX_BIN" \
   --expected-home "$APP_CODEX_HOME" \
@@ -141,11 +142,13 @@ def write_profile_app_wrapper(
   --expected-schema-sha256 "$EXPECTED_SCHEMA_SHA256" \
   --expected-capability-receipt-sha256 "$EXPECTED_RECEIPT_SHA256"
 """
+    runtime_sync_option = " --preserve-runtime-settings" if generation_validation else ""
     script = f"""#!/usr/bin/env sh
 set -eu
 
 STORE_ROOT={shlex.quote(str(store.root))}
 LIVE_CODEX_HOME={shlex.quote(str(store.live_codex_home))}
+OFFICIAL_CODEX_HOME={shlex.quote(str(store.official_codex_home))}
 APP_CODEX_HOME={shlex.quote(str(app_home))}
 CODEX_BIN={shlex.quote(str(bin_path))}
 SWITCH_SCRIPTS={shlex.quote(str(switch_scripts))}
@@ -182,13 +185,14 @@ if [ "${{CODEX_SWITCH_REBIND_SMOKE:-}}" = "1" ]; then
 fi
 
 umask 077
+{generation_validation}
 env PYTHONPATH="$SWITCH_SCRIPTS" "$PYTHON_BIN" -B \
   "$SWITCH_SCRIPTS/codex_switch_home_sync.py" \
   prepare-launch \
   --live-home "$LIVE_CODEX_HOME" \
   --app-home "$APP_CODEX_HOME" \
   --profile-config "$PROFILE_CONFIG" \
-  --profile-name "$PROFILE_NAME"
+  --profile-name "$PROFILE_NAME"{runtime_sync_option}
 {generation_validation}
 
 export CODEX_HOME="$APP_CODEX_HOME"

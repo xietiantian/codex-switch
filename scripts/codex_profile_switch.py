@@ -284,6 +284,15 @@ def add_simple_parsers(sub: argparse._SubParsersAction[argparse.ArgumentParser])
     )
     verify.set_defaults(func=cmd_verify)
 
+    from codex_switch_verify import cmd_verify_app_launch
+    launch_verify = sub.add_parser(
+        "verify-app-launch",
+        help="Check the actual App launcher/home handshake; changed settings may trigger compatibility preparation.",
+    )
+    launch_verify.add_argument("name", nargs="?", default="internal")
+    launch_verify.set_defaults(func=cmd_verify_app_launch)
+
+
     shim_env = sub.add_parser("shim-env", help="Print shell export used by the codex shim.")
     shim_env.set_defaults(func=cmd_shim_env)
 

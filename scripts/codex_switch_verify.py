@@ -1252,6 +1252,27 @@ def run_app_server_smoke(
     return 0, "app-server smoke passed"
 
 
+def run_actual_app_launch_smoke(store: Store, name: str) -> SmokeOutcome:
+    """Explicit opt-in: exercise normal launcher preparation and actual home."""
+    binding = resolve_store_runtime_binding(store, name, manifest=store.load_manifest(name))
+    started = time.monotonic()
+    code, output = run_app_server_smoke(
+        str(binding.desktop_cli), binding.codex_home,
+        # The public opt-in may need the same bounded preparation as a rebind.
+        # It must never inherit the private bypass used by staged smoke tests.
+        extra_env={"CODEX_SWITCH_REBIND_SMOKE": "0"},
+        response_timeout_seconds=180.0,
+    )
+    return SmokeOutcome(
+        status="passed" if code == 0 else "failed", kind="app-launch smoke",
+        summary="Actual App launcher handshake passed" if code == 0 else "Actual App launcher handshake failed",
+        command=(str(binding.desktop_cli), *app_server_smoke_args()), returncode=code,
+        stdout=output, stderr="", timed_out="timed out" in output.lower(),
+        stdout_truncated=False, stderr_truncated=False,
+        duration_seconds=time.monotonic() - started,
+    )
+
+
 def _managed_capability_receipt_problem(
     binding: RuntimeBinding,
     manifest: Mapping[str, object],
@@ -1948,7 +1969,11 @@ def _validate_parity_fingerprints(
         "shared": official_home / "config.toml",
         "runtime": binding.codex_home / "config.toml",
     }
+    from codex_switch_runtime_config import runtime_compatibility_digest
+    digests = dict(internal.config_sha256s)
     for name, expected_sha256 in internal.config_sha256s:
+        if name == "runtime_semantics_v1":
+            continue
         path = config_paths.get(name)
         if (
             path is None
@@ -1959,6 +1984,12 @@ def _validate_parity_fingerprints(
             )
             != expected_sha256
         ):
+            if name == "runtime" and path is not None and "runtime_semantics_v1" in digests:
+                try:
+                    if runtime_compatibility_digest(path.read_bytes()) == digests["runtime_semantics_v1"]:
+                        continue
+                except (OSError, ValueError, UnicodeDecodeError):
+                    pass
             raise ParityValidationError(
                 "parity.config.source_stale",
                 f"Parity {name} config changed after preparation.",
@@ -1990,10 +2021,16 @@ def validate_prepared_parity_config(
         for path, payload in projection.payloads
     }
     config_hashes["runtime"] = hashlib.sha256(runtime_payload).hexdigest()
-    if (
-        not artifact.receipt.healthy
-        or config_hashes != dict(artifact.receipt.internal_fingerprint.config_sha256s)
-    ):
+    expected_hashes = dict(artifact.receipt.internal_fingerprint.config_sha256s)
+    semantic = expected_hashes.pop("runtime_semantics_v1", None)
+    if semantic is not None:
+        from codex_switch_runtime_config import runtime_compatibility_digest
+        try:
+            if runtime_compatibility_digest(runtime_payload) == semantic:
+                config_hashes["runtime"] = expected_hashes["runtime"]
+        except (ValueError, UnicodeDecodeError):
+            pass
+    if not artifact.receipt.healthy or config_hashes != expected_hashes:
         raise ParityValidationError(
             "parity.config.source_stale",
             "Prepared parity configuration changed; run set-bin internal with the current backend before switching.",
@@ -2449,6 +2486,13 @@ def resolve_verification_runtime_bindings(
         app_problem=app_problem,
         selection_problem=None,
     )
+
+
+def cmd_verify_app_launch(args: argparse.Namespace) -> None:
+    outcome = run_actual_app_launch_smoke(make_store(args), args.name)
+    if outcome.status != "passed":
+        raise SwitchError(sanitize_external_text(outcome.summary + ": " + outcome.stdout))
+    print("Actual App launcher handshake: passed")
 
 
 def cmd_verify(args: argparse.Namespace) -> None:

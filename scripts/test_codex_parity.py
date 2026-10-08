@@ -2568,8 +2568,8 @@ class ParityMethodCoverageTests(unittest.TestCase):
                 any(
                     finding.category == "feature"
                     and finding.code == "parity.feature.core_drift"
-                    and finding.message
-                    == "item_ids does not match parity policy."
+                    and finding.message.startswith("item_ids: official=")
+                    and "internal=" in finding.message
                     for finding in evaluation.findings
                 )
             )
@@ -4849,6 +4849,21 @@ class ParityPreparationTests(unittest.TestCase):
             self.assertTrue(prepare_custom().healthy)
             self.assertTrue(cache.is_symlink())
             cache.unlink()
+
+            # Unsupported optional flags explicitly requested by the candidate
+            # must fail before a native/model probe, including when neither
+            # inventory lists the feature.
+            original_profile = profile_config.read_bytes()
+            profile_config.write_bytes(original_profile + b'\n[features]\nnonfatal_clock_read_errors = true\n')
+            unsupported_candidate = replace(candidate, source_config=parity_module.ConfigInputs.capture(
+                profile_config=profile_config, source_paths=(profile_config, shared_config)))
+            unexpected_probe = mock.Mock(side_effect=AssertionError("unsupported config reached probes"))
+            with self.assertRaises(ParityValidationError) as unsupported:
+                prepare_custom(unexpected_probe, unsupported_candidate)
+            self.assertEqual(unsupported.exception.code, "parity.preparation.policy_unhealthy")
+            self.assertIn("parity.config.unsupported_feature", str(unsupported.exception))
+            unexpected_probe.assert_not_called()
+            profile_config.write_bytes(original_profile)
 
             bad_catalogs = (
                 b"not-json", b"{}", b'{"models":[]}',

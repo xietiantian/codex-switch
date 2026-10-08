@@ -72,6 +72,7 @@ set -eu
 
 STORE_ROOT={shlex.quote(str(store.root))}
 FALLBACK_CODEX_HOME={shlex.quote(str(codex_home))}
+OFFICIAL_CODEX_HOME={shlex.quote(str(store.official_codex_home))}
 FALLBACK_CODEX_BIN={shlex.quote(str(codex_bin))}
 SWITCH_SCRIPTS={shlex.quote(str(scripts))}
 PYTHON_BIN={shlex.quote(str(python_bin))}
@@ -81,6 +82,7 @@ exec env PYTHONPATH="$SWITCH_SCRIPTS" "$PYTHON_BIN" -B \\
   exec-internal-shell \\
   --store-root "$STORE_ROOT" \\
   --fallback-home "$FALLBACK_CODEX_HOME" \\
+  --official-home "$OFFICIAL_CODEX_HOME" \\
   --fallback-backend "$FALLBACK_CODEX_BIN" \\
   -- "$@"
 """

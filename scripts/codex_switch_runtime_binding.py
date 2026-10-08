@@ -150,6 +150,13 @@ class RuntimeBindingError(SwitchError):
         self.findings = findings
 
 
+class RuntimeConfigurationChanged(RuntimeBindingError):
+    """Intact generation whose runtime inputs need fresh compatibility evidence."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("runtime.config.changed", message)
+
+
 def _finding(
     code: str,
     severity: str,
@@ -355,9 +362,9 @@ def _required_generation_digest(
     return value
 
 
-def _required_runtime_config_digest(
+def _required_runtime_config_digests(
     internal_fingerprint: Mapping[str, object],
-) -> str:
+) -> dict[str, str]:
     raw_entries = internal_fingerprint.get("config_sha256s")
     if not isinstance(raw_entries, list):
         raise _generation_error(
@@ -376,7 +383,7 @@ def _required_runtime_config_digest(
         name = raw_entry.get("name")
         if (
             not isinstance(name, str)
-            or name not in expected_names
+            or name not in expected_names | {"runtime_semantics_v1"}
             or name in digests
         ):
             raise _generation_error(
@@ -386,11 +393,11 @@ def _required_runtime_config_digest(
             raw_entry.get("sha256"),
             label=f"parity {name} config",
         )
-    if set(digests) != expected_names:
+    if set(digests) - {"runtime_semantics_v1"} != expected_names:
         raise _generation_error(
             "parity receipt config digests are incomplete"
         )
-    return digests["runtime"]
+    return digests
 
 
 def _generation_file_digest(
@@ -666,6 +673,7 @@ def validate_internal_runtime_generation(
     expected_capability_receipt_path: Path | None = None,
     expected_schema_sha256: str = "",
     expected_capability_receipt_sha256: str = "",
+    validate_config: bool = True,
 ) -> InternalRuntimeGeneration:
     canonical_store = _canonical_generation_path(
         store_root,
@@ -860,7 +868,7 @@ def validate_internal_runtime_generation(
         raise _generation_error(
             "parity receipt has no internal generation binding"
         )
-    expected_runtime_config_digest = _required_runtime_config_digest(
+    expected_config_digests = _required_runtime_config_digests(
         receipt_internal
     )
     receipt_capability_digest = _required_generation_digest(
@@ -883,45 +891,34 @@ def validate_internal_runtime_generation(
         label="parity overlay",
     )
 
-    config_path = home / "config.toml"
-    config_payload = _read_generation_file(
-        config_path,
-        label="projected config",
-        max_bytes=_MAX_INTERNAL_GENERATION_ARTIFACT_BYTES,
-    )
-    if (
-        hashlib.sha256(config_payload).hexdigest()
-        != expected_runtime_config_digest
-    ):
-        raise _generation_error(
-            "projected config digest does not match the parity receipt"
+    if validate_config:
+        from codex_switch_runtime_config import runtime_compatibility_digest
+        config_payload = _read_generation_file(
+            home / "config.toml", label="projected config",
+            max_bytes=_MAX_INTERNAL_GENERATION_ARTIFACT_BYTES,
         )
-    try:
-        import tomllib
+        if hashlib.sha256(config_payload).hexdigest() != expected_config_digests["runtime"]:
+            try:
+                reusable = (expected_config_digests.get("runtime_semantics_v1")
+                            == runtime_compatibility_digest(config_payload))
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise _generation_error("projected config TOML is invalid") from exc
+            if not reusable:
+                raise RuntimeConfigurationChanged(
+                    "Internal runtime configuration changed; current settings require compatibility preparation."
+                )
 
-        config = tomllib.loads(config_payload.decode("utf-8"))
-    except (ImportError, UnicodeDecodeError, ValueError) as exc:
-        raise _generation_error("projected config TOML is invalid") from exc
-    configured_overlay = config.get("model_catalog_json")
-    if (
-        not isinstance(configured_overlay, str)
-        or _canonical_generation_path(
-            configured_overlay,
-            label="projected config overlay",
-        )
-        != overlay_path
-    ):
-        raise _generation_error(
-            "projected config does not select the parity overlay generation"
-        )
-    features = config.get("features")
-    if (
-        not isinstance(features, Mapping)
-        or features.get("multi_agent_v2") is not True
-    ):
-        raise _generation_error(
-            "projected config does not enable the v2 generation"
-        )
+        import tomllib
+        try:
+            config = tomllib.loads(config_payload.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise _generation_error("projected config TOML is invalid") from exc
+        configured_overlay = config.get("model_catalog_json")
+        if not isinstance(configured_overlay, str) or _canonical_generation_path(configured_overlay, label="projected config overlay") != overlay_path:
+            raise _generation_error("projected config does not select the parity overlay generation")
+        features = config.get("features")
+        if not isinstance(features, Mapping) or features.get("multi_agent_v2") is not True:
+            raise _generation_error("projected config does not enable the v2 generation")
 
     return InternalRuntimeGeneration(
         backend_cli=backend,
@@ -1533,12 +1530,15 @@ def _internal_generation_parser() -> argparse.ArgumentParser:
     validate.add_argument("--expected-backend", type=Path)
     validate.add_argument("--expected-home", type=Path)
     validate.add_argument("--expected-capability-receipt-path", type=Path)
+    validate.add_argument("--official-home", type=Path)
+    validate.add_argument("--refresh-config", action="store_true")
     validate.add_argument("--expected-schema-sha256", default="")
     validate.add_argument("--expected-capability-receipt-sha256", default="")
 
     shell = commands.add_parser("exec-internal-shell")
     shell.add_argument("--store-root", type=Path, required=True)
     shell.add_argument("--fallback-home", type=Path, required=True)
+    shell.add_argument("--official-home", type=Path)
     shell.add_argument("--fallback-backend", type=Path, required=True)
     shell.add_argument("backend_args", nargs=argparse.REMAINDER)
     return parser
@@ -1575,7 +1575,11 @@ def _run_internal_generation_command(
 ) -> int:
     args = _internal_generation_parser().parse_args(argv)
     if args.command == "validate-internal-generation":
-        validate_internal_runtime_generation(
+        from codex_switch_runtime_config import ensure_internal_runtime_generation
+        validator = ensure_internal_runtime_generation if args.refresh_config else validate_internal_runtime_generation
+        options = {"official_home": args.official_home} if args.refresh_config else {}
+        validator(
+            **options,
             store_root=args.store_root,
             fallback_home=args.fallback_home,
             launcher_path=args.launcher_path,
@@ -1618,8 +1622,10 @@ def _run_internal_generation_command(
             if manifest_has_internal_cli_generation(manifest)
             else None
         )
+        from codex_switch_runtime_config import ensure_internal_runtime_generation
         app_generation = (
-            validate_internal_runtime_generation(
+            ensure_internal_runtime_generation(
+                official_home=args.official_home,
                 store_root=canonical_store,
                 fallback_home=args.fallback_home,
             )

@@ -1,6 +1,27 @@
 # Task Ledger
 
-## Active Change: Staged Internal Update
+## Current Task: Commit and retest the existing repairs (2026-10-08)
+
+- Requester authorization: organize and commit the existing optional-parity and
+  runtime-configuration launch repairs, rebuild the dependent test entry from
+  committed source, rerun isolated tests and diagnose current-version failures.
+- This task introduces no new compatibility exception or production repair.
+  Existing behavior/specification and prior source review remain applicable.
+- Keep generated packages, historical local test trees and unrelated research
+  untracked. No live configuration, authentication, Desktop activation, release
+  or archive action is required.
+- Commit preparation is complete; fresh exact-commit test results will be
+  recorded after packaging. Earlier verification below remains historical.
+
+## Active Change: Optional runtime parity differences
+
+- Scope: approved feature/protocol exceptions and bounded apply/status/replay diagnostics; preserve core, unknown and removed-feature checks.
+- Canonical task queue: openspec/changes/allow-optional-setup-parity-differences/tasks.md.
+- Current approval: implement the reviewed system_proxy_fallback absence classification, policy 7 and startup-budget adjustments in two protocol tests.
+- Caller-specific workflows, configuration generation, authentication guidance and integration records are outside this repository.
+- Status: approved implementation verified: 187 regression cases, 6 repeated timing cases and 17 installed runtime cases pass; manifests, strict OpenSpec and diff checks pass. Spec review documentation corrections applied. No live installation or Git publication.
+
+## Previous Change: Staged Internal Update
 
 - Approved complete target: generic persistent `update-internal stage/apply/status/cancel`,
   private final-home capture and parity, transactional full/first apply, durable
@@ -3384,3 +3405,11 @@ git diff --check
   must completely quit ChatGPT before running the installed shortcut; this
   gate does not authorize an internal binary update, parity repair, Git,
   release, archive, project migration, or retained-artifact cleanup.
+
+## Approved runtime configuration launch repair (2026-09-29)
+
+Execution source: `openspec/changes/revalidate-runtime-config-at-launch/tasks.md`. Root owns generic runtime, evidence, launcher synchronization and public verification; no dependent caller content or live effects. Previous optional work retained.
+
+Runtime launch incidental finding: `DEFER_AND_CONTINUE` — newer Desktop packaging and runtime inventories require an independent version-adaptation decision; requester explicitly excluded that follow-up from this repair. The approved compatibility-input repair remains independently verifiable with its original reference version. Do not broaden feature/protocol policy or Desktop discovery in this change.
+
+Completion: all six active tasks are complete for source and isolated verification. Fresh final Profile/Wrapper 227, Update/Release 200, boundary 10 and exact installed 26 checks pass; Spec/Standards reviews are closed. Retained generic evidence: `.planning/verification/runtime-config-launch-20260929.md`. Immutable artifact and frozen-input guards remain enforced. No live readiness, release, archive, install or Git effect is claimed.

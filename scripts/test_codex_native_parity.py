@@ -85,6 +85,14 @@ def start_loopback_server(requests: list[dict]):
 @unittest.skipUnless(BACKEND, "set CODEX_SWITCH_TEST_BACKEND to an explicit test CLI")
 class NativeParityTests(unittest.TestCase):
     def test_real_core_and_typed_v2_with_local_provider(self) -> None:
+        self.run_real_probe()
+
+    def test_real_core_and_typed_v2_with_setup_preferences(self) -> None:
+        self.run_real_probe(
+            'apps=false\nguardian_approval=false\nprevent_idle_sleep=true\n'
+        )
+
+    def run_real_probe(self, feature_settings: str = "") -> None:
         requests: list[dict] = []
 
         server, thread = start_loopback_server(requests)
@@ -108,6 +116,7 @@ class NativeParityTests(unittest.TestCase):
                     f'base_url="http://127.0.0.1:{server.server_port}/v1"\n'
                     'wire_api="responses"\nrequires_openai_auth=false\n'
                     'request_max_retries=0\n[features]\nmulti_agent_v2=true\n'
+                    + feature_settings
                 )
                 backend = Path(BACKEND).absolute()
 
