@@ -6,6 +6,6 @@
 - [x] 2.1 Collect actual current pair evidence and record exact required adaptations.
 - [x] 2.2 Implement necessary reviewed compatibility corrections with negative and native tests.
 ## 3. Verification and delivery
-- [ ] 3.1 Run focused/broad/native tests and verify the built/installed release package.
+- [x] 3.1 Run focused/broad/native tests and verify the built/installed release package.
 - [x] 3.2 Complete separate Spec/Standards reviews and operator documentation.
-- [ ] 3.3 Commit/push the existing PR branch and record final evidence.
+- [x] 3.3 Commit/push the existing PR branch and record final evidence.

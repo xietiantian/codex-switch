@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: implementation
+current_stage: verification
 
 current_change:
   id: support-packaged-desktop-cli
-  status: verifying
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -88,9 +88,11 @@ context_health:
 
 ## Current packaged Desktop repair
 
-Implementation and both review axes are complete. Fresh discovery, focused and
-native results are in `.planning/verification/packaged-desktop-cli-20261010.md`.
-Next: exact committed package validation and authorized existing PR delivery.
+Implementation a490786e5a9c and both review axes are complete. Exact-package
+installation and 39 installed tests pass; source is pushed to the existing PR
+fork branch. Fresh discovery, focused and native results are recorded in
+`.planning/verification/packaged-desktop-cli-20261010.md`. No required source
+work remains. Release and archive are not requested.
 Historical exclusions below are superseded only by the current approved task.
 
 

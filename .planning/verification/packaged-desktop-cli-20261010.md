@@ -37,13 +37,19 @@ schema drift, new required elicitation metadata and unknown differences fail.
 - Explicit `python3 -B scripts/test_codex_profile_switch.py`: 227 pass (390.461 s).
 - Native parity and staged update with real internal / legacy official binaries:
   12 pass (195.783 s). No global App binary is modified by these fixtures.
-- Native lifecycle with current actual Desktop and loopback provider: passes.
+- Native lifecycle with current actual Desktop and loopback provider: 1 pass
+  (85.779 s).
 - Explicit Python 3.9 transaction execution passes. These native/interpreter
   runs execute all 14 cases conditionally skipped by the discovery invocation.
 - Isolated prior-policy-8 to candidate-policy-9 install succeeds, manifests
   validate, and installed check-official resolves the actual packaged CLI.
-- Strict OpenSpec and git diff checks pass. Exact committed package validation
-  and publication readback remain delivery follow-through after source commit.
+- Exact implementation a490786e5a9c is built from git archive. The prior policy 8
+  package upgrades to it in an isolated installation; manifests validate before
+  and after 39 installed runtime tests, with no bytecode residue (37.588 s).
+- Strict OpenSpec and git diff checks pass. Implementation a490786e5a9c is pushed
+  to xietiantian/codex-switch, fix/standalone-installer-runtime, the existing head
+  branch of https://github.com/cYz26/codex-switch/pull/1. This evidence-only
+  follow-up preserves the tested implementation and completes the delivery log.
 
 The full discovery invocation is not described as green: its two failures are
 closed by the fresh 98-case rerun. Logs and generated packages are retained

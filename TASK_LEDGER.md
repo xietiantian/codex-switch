@@ -7,8 +7,11 @@
 - Queue: `openspec/changes/support-packaged-desktop-cli/tasks.md`; scope,
   ownership, test seams and rollback in that change's design.
 - Baseline: `42af1e820db9`. Preserve existing untracked research/artifacts.
-- Status: implementing; native current-pair and packaged release verification
-  remain required. No release or archive requested.
+- Status: verified and delivered as a490786e5a9c to the existing PR fork branch.
+  Focused 98, profile 227, native 13, explicit Python 3.9 and exact installed 39
+  checks pass. Full discovery's two baseline failures are fixed and covered by
+  the focused rerun. Evidence: `.planning/verification/packaged-desktop-cli-20261010.md`.
+  No release or archive requested.
 
 ### Packaged Desktop incidental findings
 
