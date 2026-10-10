@@ -32,12 +32,13 @@ from codex_switch_protocol_adapter import (
 from codex_switch_runtime_config import runtime_compatibility_digest
 from codex_switch_runtime_binding import (
     CURRENT_CHATGPT_BUNDLE_ID,
+    DESKTOP_CLI_LAYOUTS,
     ChatGPTDesktopHost,
     RuntimeBinding,
 )
 
 
-PARITY_POLICY_VERSION = "8"
+PARITY_POLICY_VERSION = "9"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -569,8 +570,7 @@ class OfficialReference:
             code="parity.reference.path_invalid",
             field_name="bundled_cli",
         )
-        expected_cli = bundle_root / "Contents" / "Resources" / "codex"
-        if bundled_cli != expected_cli:
+        if bundled_cli not in {bundle_root / layout for layout in DESKTOP_CLI_LAYOUTS}:
             raise ParityValidationError(
                 "parity.reference.path_invalid",
                 "Official parity reference CLI must be the verified bundle CLI.",
@@ -1688,6 +1688,17 @@ def _schema_intersection(
         return False
     if not base:
         return branch
+    # Flatten the open object intersections created for a discriminated union.
+    # Checking each allOf member alone loses required fields contributed by the
+    # other member (e.g. threadId plus an elicitation mode's challenge).
+    object_keys = {"type", "properties", "required"}
+    if (base.get("type") == branch.get("type") == "object"
+            and set(base) <= object_keys and set(branch) <= object_keys):
+        left = base.get("properties", {})
+        right = branch.get("properties", {})
+        if all(left[key] == right[key] for key in left.keys() & right.keys()):
+            return {"type": "object", "properties": {**left, **right},
+                    "required": sorted(set(base.get("required", ())) | set(branch.get("required", ())))}
     return {"allOf": (base, branch)}
 
 
@@ -9885,6 +9896,30 @@ _USER_CHOICE_FEATURES = frozenset({
 _OPTIONAL_CAPABILITY_FEATURES = frozenset({"nonfatal_clock_read_errors", "system_proxy_fallback"})
 
 _REVIEWED_FEATURE_PAIRS = MappingProxyType({
+    "agent_message_board": (
+        FeatureRecord(name="agent_message_board", stage="under development", isolated_default=False, effective_state=False),
+        None,
+    ),
+    "daemon_auto_start": (
+        FeatureRecord(name="daemon_auto_start", stage="stable", isolated_default=True, effective_state=True),
+        None,
+    ),
+    "guardian_reuse_parent_compaction": (
+        FeatureRecord(name="guardian_reuse_parent_compaction", stage="stable", isolated_default=True, effective_state=True),
+        FeatureRecord(name="guardian_reuse_parent_compaction", stage="under development", isolated_default=False, effective_state=False),
+    ),
+    "guardianv2.thread_context": (
+        FeatureRecord(name="guardianv2.thread_context", stage="stable", isolated_default=True, effective_state=True),
+        FeatureRecord(name="guardianv2.thread_context", stage="under development", isolated_default=False, effective_state=False),
+    ),
+    "prefer_mxc": (
+        FeatureRecord(name="prefer_mxc", stage="under development", isolated_default=False, effective_state=False),
+        None,
+    ),
+    "transcript_v2": (
+        FeatureRecord(name="transcript_v2", stage="deprecated", isolated_default=False, effective_state=False),
+        FeatureRecord(name="transcript_v2", stage="under development", isolated_default=False, effective_state=False),
+    ),
     "analytics_plan_history": (
         FeatureRecord(
             name="analytics_plan_history", stage="experimental",
@@ -9950,6 +9985,15 @@ _REVIEWED_FEATURE_PAIRS = MappingProxyType({
 
 _OPTIONAL_BACKEND_REQUESTS = MappingProxyType({
     ("client_request", "thread/rollback"): "7d8534143179f149e8d580a43813282ed06efc5df01f768a2d6263677b2be9fd",
+})
+
+# Gateway-provider login is separate from ordinary configured-provider use.
+# Only these exact, unused official methods may be absent in the backend.
+_OPTIONAL_OFFICIAL_METHODS = MappingProxyType({
+    ("client_request", "account/gatewayOAuth/cancel"): "99b5a94da0cf14c3c35bc3a0b72594f96dc12c61d519711d8c8d028f81976d82",
+    ("client_request", "account/gatewayOAuth/login"): "54bc8815f30634ef80b850df159ab7b81693b2d5941807d0013336a81ed69ae0",
+    ("client_request", "account/gatewayOAuth/read"): "0e5994b2db6e583841c4af8121a7316002cf736e189d9cbe7db5b16982cac1a2",
+    ("server_notification", "account/gatewayOAuth/changed"): "8f7d6c31ecb84f844314ed926176194e0029fe3cdb68d06d53ea55e00dfd8276",
 })
 
 
@@ -10342,6 +10386,19 @@ def evaluate_parity_policy(
             )
             continue
         if (
+            entry.official is not None and entry.internal is None
+            and entry.official.schema_sha256 == _OPTIONAL_OFFICIAL_METHODS.get(key)
+            and key not in observed_protocol
+            and not any(extension[:2] == key for extension in observed_extensions)
+        ):
+            code = "parity.protocol.optional_missing"
+            findings.append(_policy_finding(
+                category="protocol", code=code, severity="warning", identifier=identifier,
+                expected="reviewed-unobserved-gateway-login", observed="internal=missing",
+            ))
+            queue.append(ParityQueueItem(category="protocol", identifier=identifier, finding_code=code))
+            continue
+        if (
             key == ("client_request", "rollout/compress")
             and entry.official is not None and entry.internal is None
             and key not in observed_protocol
@@ -10485,7 +10542,7 @@ def evaluate_parity_policy(
         if reviewed_pair is not None and (
             entry.official, entry.internal
         ) == reviewed_pair:
-            observed = name in observed_feature_names
+            observed = name in observed_feature_names or name in requested_feature_names
             code = (
                 "parity.feature.observed_core_missing" if observed and drift == "missing"
                 else "parity.feature.observed_core_drift" if observed

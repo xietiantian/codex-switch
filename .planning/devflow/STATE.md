@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: complete
+current_stage: implementation
 
 current_change:
-  id: revalidate-runtime-config-at-launch
-  status: complete
+  id: support-packaged-desktop-cli
+  status: verifying
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: true
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,13 +41,13 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-09-29-runtime-config-launch
-  last_checkpoint_file: openspec/changes/revalidate-runtime-config-at-launch/review-evidence.md
+  last_checkpoint_id: 2026-10-10-packaged-desktop-cli
+  last_checkpoint_file: .planning/verification/packaged-desktop-cli-20261010.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-09-29
+  compact_updated_at: 2026-10-10
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -79,12 +79,20 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: approved_config_launch_repair_only_new_desktop_adaptation_excluded
+  last_decision: approved_packaged_desktop_repair_and_existing_pr_push
   last_goal_status: aligned
-  goal_summary: Complete approved policy 8 runtime configuration launch repair and isolated verification.
+  goal_summary: Complete approved packaged Desktop repair, policy 9 verification and existing PR push.
 ---
 
 # Workflow State
+
+## Current packaged Desktop repair
+
+Implementation and both review axes are complete. Fresh discovery, focused and
+native results are in `.planning/verification/packaged-desktop-cli-20261010.md`.
+Next: exact committed package validation and authorized existing PR delivery.
+Historical exclusions below are superseded only by the current approved task.
+
 
 ## Commit and retest request (2026-10-08)
 

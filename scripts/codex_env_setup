@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DEFAULT_INTERNAL_BIN="$HOME/.local/bin/codex"
-DEFAULT_OFFICIAL_BIN="/Applications/ChatGPT.app/Contents/Resources/codex"
 DEFAULT_INSTALLER_URL="https://github.com/SDGLBL/codex/releases/latest/download/install.sh"
 DEFAULT_LATEST_URL="https://github.com/SDGLBL/codex/releases/latest"
 DEFAULT_MODEL="gpt-5.5-2026-04-24"
@@ -13,7 +12,7 @@ DEFAULT_PROXY_URL="http://sys-proxy-rd-relay.byted.org:8118"
 TEAM_DOC_URL="https://bytedance.larkoffice.com/docx/OOYBdDO2MoSU7nxb8iLcQAWMnPf"
 
 INTERNAL_BIN="${CODEX_INTERNAL_BIN:-$DEFAULT_INTERNAL_BIN}"
-OFFICIAL_BIN="${CODEX_OFFICIAL_BIN:-$DEFAULT_OFFICIAL_BIN}"
+OFFICIAL_BIN="${CODEX_OFFICIAL_BIN:-}"
 INSTALLER_URL="${CODEX_INSTALLER_URL:-$DEFAULT_INSTALLER_URL}"
 LATEST_URL="${CODEX_INTERNAL_LATEST_URL:-$DEFAULT_LATEST_URL}"
 INSTALL_DIR="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
@@ -842,6 +841,20 @@ update_internal() {
 }
 
 check_official() {
+  if [[ -z "$OFFICIAL_BIN" ]]; then
+    OFFICIAL_BIN="$("$PYTHON_BIN" -I -B -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from codex_switch_runtime_binding import discover_desktop_hosts
+inventory = discover_desktop_hosts()
+if inventory.current is None:
+    for finding in inventory.findings:
+        print(f"{finding.code}: {finding.message} ({finding.observed})", file=sys.stderr)
+    print("No verified current ChatGPT Desktop CLI is available.", file=sys.stderr)
+    raise SystemExit(1)
+print(inventory.current.bundled_cli)
+' "$SCRIPT_DIR")" || return 1
+  fi
   echo "Official ChatGPT.app Codex binary: $OFFICIAL_BIN"
   if [[ ! -x "$OFFICIAL_BIN" ]]; then
     echo "Current: <missing or not executable>"

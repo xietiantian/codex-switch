@@ -110,7 +110,7 @@ reference reports stage `stable` and default `true`, for either effective value.
 It reports unavailable automatic system-proxy retry after eligible connection
 failures. Explicit candidate requests, core dependencies, changed definitions,
 and actual connection/configuration failures remain blocking. These rules were
-introduced in policy 7 and are retained by the current policy 8.
+introduced in policy 7 and are retained by the current policy 9.
 
 Malformed rows and unclassified feature differences still block promotion.
 Supported `apps`, `guardian_approval`, and `prevent_idle_sleep` choices may differ
@@ -121,6 +121,22 @@ config requires internal support. Missing `rollout/compress` is a warning about
 the explicit old-session compression trigger; validation does not call this RPC.
 Unknown methods, observed core dependencies, and other schema drift still fail.
 `enable_fanout` and other removed-flag policy is unchanged.
+
+Current ChatGPT bundles may contain either `Contents/Resources/codex` or the
+packaged `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`.
+Discovery, official binding, parity and version checks resolve the actual
+executable consistently. The packaged entry wrapper must also be valid;
+invalid packaged layouts do not fall back to an old sibling CLI. Staging
+reports invalid installed bundles before downloading and freezes both the
+executable and entry wrapper until apply.
+
+Policy 9 accepts only the reviewed default states of `agent_message_board`,
+`daemon_auto_start`, `guardian_reuse_parent_compaction`,
+`guardianv2.thread_context`, `prefer_mxc`, and `transcript_v2` as optional
+differences. Explicit requests and observed dependencies remain blocking.
+The exact unused `account/gatewayOAuth` schemas may be absent; this does not
+provide gateway sign-in. MCP elicitation's compatible open-object union
+schemas are compared with their combined required fields intact.
 
 Policy 8 binds launch compatibility evidence to parsed runtime settings. Changes
 to marketplaces, plugins, skills, TUI/history, hook trust records or project trust

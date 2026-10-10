@@ -8,6 +8,16 @@ import os
 import sys
 from pathlib import Path
 
+# Application imports require tomllib too, so reject unsupported interpreters
+# before importing them or touching profile state.
+if sys.version_info < (3, 11):
+    print(
+        "codex-profile-switch: Python 3.11+ with tomllib is required "
+        "before any profile state mutation",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
 from codex_switch_core import (
     CONFIG_MODE_SHARED,
     CONFIG_MODE_SNAPSHOT,
@@ -374,13 +384,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    if sys.version_info < (3, 11):
-        print(
-            "codex-profile-switch: Python 3.11+ with tomllib is required "
-            "before any profile state mutation",
-            file=sys.stderr,
-        )
-        return 2
     try:
         args.func(args)
     except SwitchError as exc:

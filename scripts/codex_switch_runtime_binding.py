@@ -20,6 +20,10 @@ from codex_switch_update_policy import parse_semantic_version
 
 
 CURRENT_CHATGPT_BUNDLE_ID = "com.openai.codex"
+LEGACY_DESKTOP_CLI = Path("Contents/Resources/codex")
+PACKAGED_DESKTOP_CLI = Path("Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex")
+PACKAGED_DESKTOP_ENTRY = Path("Contents/Resources/codex-cli/bin/codex")
+DESKTOP_CLI_LAYOUTS = (LEGACY_DESKTOP_CLI, PACKAGED_DESKTOP_CLI)
 _MAX_INTERNAL_GENERATION_MANIFEST_BYTES = 1024 * 1024
 _MAX_INTERNAL_GENERATION_ARTIFACT_BYTES = 16 * 1024 * 1024
 _MAX_INTERNAL_GENERATION_EXECUTABLE_BYTES = 2 * 1024 * 1024 * 1024
@@ -209,6 +213,28 @@ def _is_regular_executable(path: Path, *, allow_symlink: bool = False) -> bool:
     except OSError:
         return False
     return stat.S_ISREG(mode) and os.access(str(path), os.X_OK)
+
+
+def resolve_desktop_cli(bundle_root: Path) -> Path:
+    """Resolve an executable in a supported bundle, never a PATH fallback."""
+    packaged = bundle_root / "Contents/Resources/codex-cli"
+    if os.path.lexists(packaged):
+        members = (PACKAGED_DESKTOP_ENTRY, PACKAGED_DESKTOP_CLI)
+    else:
+        members = (LEGACY_DESKTOP_CLI,)
+    for member in members:
+        path = bundle_root / member
+        parents = [bundle_root, *(bundle_root / part for part in member.parents if part != Path('.'))]
+        if not _is_regular_executable(path) or any(parent.is_symlink() for parent in parents):
+            finding = _finding(
+                "desktop.current.cli_invalid", "error",
+                "ChatGPT Desktop bundled Codex CLI member is missing, non-regular, linked, or not executable.",
+                observed=path,
+            )
+            raise RuntimeBindingError(finding.code, finding.message, (finding,))
+    # The packaged entry is a shell trampoline. Attest and execute its actual
+    # bundled backend so replacing that backend always invalidates receipts.
+    return bundle_root / members[-1]
 
 
 def _generation_error(message: str) -> RuntimeBindingError:
@@ -985,7 +1011,11 @@ def discover_desktop_hosts(
             )
         else:
             main = current_root / "Contents" / "MacOS" / "ChatGPT"
-            cli = current_root / "Contents" / "Resources" / "codex"
+            try:
+                cli = resolve_desktop_cli(current_root)
+            except RuntimeBindingError as error:
+                findings.extend(error.findings)
+                cli = None
             if not _is_regular_executable(main):
                 findings.append(
                     _finding(
@@ -995,16 +1025,7 @@ def discover_desktop_hosts(
                         observed=main,
                     )
                 )
-            if not _is_regular_executable(cli):
-                findings.append(
-                    _finding(
-                        "desktop.current.cli_invalid",
-                        "error",
-                        "ChatGPT Desktop bundled Codex CLI is missing, non-regular, or not executable.",
-                        observed=cli,
-                    )
-                )
-            if _is_regular_executable(main) and _is_regular_executable(cli):
+            if _is_regular_executable(main) and cli is not None:
                 current = ChatGPTDesktopHost(
                     kind="chatgpt",
                     bundle_root=current_root,

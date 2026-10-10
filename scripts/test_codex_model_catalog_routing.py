@@ -154,7 +154,8 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         from codex_switch_home_sync import plugin_support_snapshot_name
         source = self.root / "private/config.toml"
         source.parent.mkdir()
-        source.write_text(self.profile_payload)
+        source.write_text(self.profile_payload + '[notice]\nkeep = true\n')
+        self.shared.write_text('[notice]\nstale_shared = true\n')
         (self.internal_home / "config.toml").write_text('model = "obsolete"\nnotify = ["removed-hook"]\n')
         (self.internal_home / "internal.config.toml").write_text('model = "obsolete"\n[hooks]\nenabled = true\n')
         (self.profile.parent / plugin_support_snapshot_name("internal")).write_text('[hooks.state."removed:stop:0"]\ntrusted_hash = "sha256:old"\n')
@@ -162,6 +163,7 @@ class ModelCatalogRoutingTests(unittest.TestCase):
         runtime = bundle.active_runtime_config_payload
         self.assertIn(b'# codex-switch: managed runtime config for profile internal', runtime)
         self.assertIn(b'keep = true', runtime)
+        self.assertNotIn(b'stale_shared', runtime)
         self.assertNotIn(b'obsolete', runtime)
         self.assertNotIn(b'removed-hook', runtime)
         self.assertNotIn(b'[hooks', runtime)

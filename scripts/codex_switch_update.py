@@ -31,7 +31,9 @@ from codex_switch_constants import SwitchError
 from codex_switch_first_install import create_directory
 from codex_switch_home_select import resolve_runtime_homes
 from codex_switch_internal_runtime import runtime_manifest
-from codex_switch_runtime_binding import discover_desktop_hosts
+from codex_switch_runtime_binding import (
+    PACKAGED_DESKTOP_CLI, PACKAGED_DESKTOP_ENTRY, discover_desktop_hosts,
+)
 from codex_switch_store import make_store
 from codex_switch_update_policy import extract_semantic_version, parse_semantic_version
 
@@ -237,17 +239,25 @@ def desktop_reference():
     inventory = discover_desktop_hosts()
     host = inventory.current
     if host is None:
+        errors = [finding for finding in inventory.findings if finding.severity == "error"]
+        if errors:
+            raise UpdateError("; ".join(
+                f"{finding.code}: {finding.message} ({finding.observed})" for finding in errors
+            ), reason="desktop_invalid")
         return {"present": False}
     if not host.healthy:
         raise UpdateError("The installed Desktop reference is unhealthy")
     identity = file_state(host.bundled_cli)
     if identity is None:
         raise UpdateError("Desktop bundled CLI is missing")
-    return {"present": True, "bundle_path": str(host.bundle_root),
+    reference = {"present": True, "bundle_path": str(host.bundle_root),
             "bundled_cli_path": str(host.bundled_cli), "bundle_id": host.bundle_id,
             "version": probe_version(host.bundled_cli), "sha256": identity["sha256"],
             "bundle_identity": directory_state(host.bundle_root, owned=False),
             "info_plist": file_state(host.bundle_root / "Contents/Info.plist")}
+    if host.bundled_cli == host.bundle_root / PACKAGED_DESKTOP_CLI:
+        reference["packaged_entry"] = file_state(host.bundle_root / PACKAGED_DESKTOP_ENTRY)
+    return reference
 
 
 def tree_state(root):
@@ -390,12 +400,14 @@ def stage(args, store):
     except FileExistsError:
         pass
     directory_state(updates, private=True)
+    # Invalid installed hosts fail before allocating an update ID or downloading
+    # a candidate. Once an ID exists, its first persisted record is queryable.
+    snapshot = context_snapshot(store, target)
     update_id = secrets.token_hex(12)
     args.update_id = update_id
     root = updates / update_id
     root.mkdir(mode=0o700)
     with record_lock(root):
-        snapshot = context_snapshot(store, target)
         candidate = target if args.current else target.parent / (".codex-internal-update-" + update_id) / "codex"
         record = {"schema_version": SCHEMA, "update_id": update_id, "state": "staging",
                   "store_path": str(store.root), "target_path": str(target),

@@ -1,5 +1,22 @@
 # Task Ledger
 
+## Current Task: Packaged Desktop CLI repair (2026-10-10)
+
+- Requester approved the concrete diagnosis/repair and commit/push to
+  `fix/standalone-installer-runtime`. No caller-specific business content.
+- Queue: `openspec/changes/support-packaged-desktop-cli/tasks.md`; scope,
+  ownership, test seams and rollback in that change's design.
+- Baseline: `42af1e820db9`. Preserve existing untracked research/artifacts.
+- Status: implementing; native current-pair and packaged release verification
+  remain required. No release or archive requested.
+
+### Packaged Desktop incidental findings
+
+| ID | Classification | Evidence / resolution |
+|---|---|---|
+| PACKAGED-PYTHON-PREFLIGHT | CONTINUE_WITH_MINIMAL_GUARD | Baseline 42af direct Python 3.9 entry fails during tomllib import before its version guard. Move the existing guard before application imports; preserve exit 2 and no store write. |
+| PACKAGED-PRIVATE-SEED-TEST | CONTINUE_WITH_MINIMAL_GUARD | Baseline 42af test expects an old shared setting after explicit private-seed replacement. Correct fixture to verify a retained setting in the new seed and exclusion of stale shared state; production rendering is unchanged. |
+
 ## Current Task: Commit and retest the existing repairs (2026-10-08)
 
 - Requester authorization: organize and commit the existing optional-parity and

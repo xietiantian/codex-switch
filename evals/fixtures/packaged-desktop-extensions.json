@@ -1,0 +1,1548 @@
+{
+  "official": {
+    "features": [
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "agent_message_board",
+        "stage": "under development"
+      },
+      {
+        "effective_state": true,
+        "isolated_default": true,
+        "name": "daemon_auto_start",
+        "stage": "stable"
+      },
+      {
+        "effective_state": true,
+        "isolated_default": true,
+        "name": "guardian_reuse_parent_compaction",
+        "stage": "stable"
+      },
+      {
+        "effective_state": true,
+        "isolated_default": true,
+        "name": "guardianv2.thread_context",
+        "stage": "stable"
+      },
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "prefer_mxc",
+        "stage": "under development"
+      },
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "transcript_v2",
+        "stage": "deprecated"
+      }
+    ],
+    "methods": [
+      {
+        "direction": "client_request",
+        "method": "account/gatewayOAuth/cancel",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "account/gatewayOAuth/cancel"
+              ]
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ]
+        }
+      },
+      {
+        "direction": "client_request",
+        "method": "account/gatewayOAuth/login",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "account/gatewayOAuth/login"
+              ]
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ]
+        }
+      },
+      {
+        "direction": "client_request",
+        "method": "account/gatewayOAuth/read",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "account/gatewayOAuth/read"
+              ]
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ]
+        }
+      },
+      {
+        "direction": "server_request",
+        "method": "mcpServer/elicitation/request",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "mcpServer/elicitation/request"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "serverName": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "turnId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "serverName",
+                "threadId"
+              ],
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "challenge": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openai/userVerification"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "challenge",
+                    "description",
+                    "mode",
+                    "title"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "elicitationId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "elicitationId",
+                    "message",
+                    "mode",
+                    "url"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "form"
+                      ]
+                    },
+                    "requestedSchema": {
+                      "type": "object",
+                      "properties": {
+                        "$schema": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "properties": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "maximum": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "minimum": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "integer",
+                                      "number"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "boolean"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "format": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "date",
+                                          "date-time",
+                                          "email",
+                                          "uri"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "maxLength": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint32",
+                                    "minimum": 0.0
+                                  },
+                                  "minLength": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint32",
+                                    "minimum": 0.0
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "string"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "default": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "description": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "enum": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "enumNames": {
+                                        "type": [
+                                          "array",
+                                          "null"
+                                        ],
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "title": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "string"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "enum",
+                                      "type"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "array",
+                                              "null"
+                                            ],
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anyOf": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "const": {
+                                                      "type": "string"
+                                                    },
+                                                    "title": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "const",
+                                                    "title"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "anyOf"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "maxItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "minItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "array"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "items",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "array",
+                                              "null"
+                                            ],
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "enum": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "string"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "enum",
+                                              "type"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "maxItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "minItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "array"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "items",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "enum": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "string"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "enum",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "oneOf": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "const": {
+                                                  "type": "string"
+                                                },
+                                                "title": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "const",
+                                                "title"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "string"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "oneOf",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "required": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "object"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "properties",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openai/form"
+                      ]
+                    },
+                    "requestedSchema": true
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openaiForm"
+                      ]
+                    },
+                    "requestedSchema": true
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ]
+        }
+      },
+      {
+        "direction": "server_notification",
+        "method": "account/gatewayOAuth/changed",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "account/gatewayOAuth/changed"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "authUrl": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "providerId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "failed",
+                    "notReady",
+                    "started",
+                    "succeeded"
+                  ]
+                }
+              },
+              "required": [
+                "providerId",
+                "status"
+              ]
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        }
+      }
+    ]
+  },
+  "internal": {
+    "features": [
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "guardian_reuse_parent_compaction",
+        "stage": "under development"
+      },
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "guardianv2.thread_context",
+        "stage": "under development"
+      },
+      {
+        "effective_state": false,
+        "isolated_default": false,
+        "name": "transcript_v2",
+        "stage": "under development"
+      }
+    ],
+    "methods": [
+      {
+        "direction": "server_request",
+        "method": "mcpServer/elicitation/request",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "mcpServer/elicitation/request"
+              ]
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "serverName": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "turnId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "serverName",
+                "threadId"
+              ],
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "elicitationId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "elicitationId",
+                    "message",
+                    "mode",
+                    "url"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "form"
+                      ]
+                    },
+                    "requestedSchema": {
+                      "type": "object",
+                      "properties": {
+                        "$schema": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "properties": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "maximum": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "minimum": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ],
+                                    "format": "double"
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "integer",
+                                      "number"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "boolean"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "default": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "format": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "date",
+                                          "date-time",
+                                          "email",
+                                          "uri"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "maxLength": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint32",
+                                    "minimum": 0.0
+                                  },
+                                  "minLength": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint32",
+                                    "minimum": 0.0
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "string"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "default": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "description": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "enum": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "enumNames": {
+                                        "type": [
+                                          "array",
+                                          "null"
+                                        ],
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "title": {
+                                        "type": [
+                                          "null",
+                                          "string"
+                                        ]
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "string"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "enum",
+                                      "type"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "array",
+                                              "null"
+                                            ],
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anyOf": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "const": {
+                                                      "type": "string"
+                                                    },
+                                                    "title": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "const",
+                                                    "title"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "anyOf"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "maxItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "minItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "array"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "items",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "array",
+                                              "null"
+                                            ],
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "enum": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "string"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "enum",
+                                              "type"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "maxItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "minItems": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "format": "uint64",
+                                            "minimum": 0.0
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "array"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "items",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "enum": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "string"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "enum",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "default": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "description": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "oneOf": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "const": {
+                                                  "type": "string"
+                                                },
+                                                "title": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "const",
+                                                "title"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "title": {
+                                            "type": [
+                                              "null",
+                                              "string"
+                                            ]
+                                          },
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "string"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "oneOf",
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "required": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "object"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "properties",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openai/form"
+                      ]
+                    },
+                    "requestedSchema": true
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_meta": true,
+                    "message": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openaiForm"
+                      ]
+                    },
+                    "requestedSchema": true
+                  },
+                  "required": [
+                    "message",
+                    "mode",
+                    "requestedSchema"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "challenge": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "openai/userVerification"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "challenge",
+                    "description",
+                    "mode",
+                    "title"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ]
+        }
+      }
+    ]
+  }
+}
