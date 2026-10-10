@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: verification
+current_stage: implementation
 
 current_change:
-  id: support-packaged-desktop-cli
-  status: verified
+  id: allow-optional-setup-parity-differences
+  status: implementing
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: true
-  verification_passed: true
+  implementation_done: false
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -85,6 +85,10 @@ context_health:
 ---
 
 # Workflow State
+
+## Current default-difference follow-up
+
+Use the existing allow-optional-setup-parity-differences tasks 9–13. Supported defaults use a generic warning; specialized, explicit-dependency and protocol checks retain precedence. Baseline c0ebda44dea6, implementation/verification in progress. Existing PR push and exact package refresh remain authorized; release/archive are excluded.
 
 ## Current packaged Desktop repair
 

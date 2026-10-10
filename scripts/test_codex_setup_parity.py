@@ -40,6 +40,94 @@ class SetupParityTests(unittest.TestCase):
                     self.assertIn(f"official={str(enabled).lower()}", finding.message)
                     self.assertIn(f"internal={str(not enabled).lower()}", finding.message)
 
+    def test_supported_defaults_differ_without_blocking_update(self):
+        name = "instant_interrupt"
+        official = self.feature(name, False, stage="under development", default=False)
+        internal = self.feature(name, True, stage="under development", default=True)
+        result = self.evaluate([official], [internal])
+        self.assertTrue(result.healthy, result.findings)
+        findings = [item for item in result.findings if item.category == "feature"]
+        self.assertEqual(len(findings), 1)
+        finding = findings[0]
+        self.assertEqual(finding.code, "parity.feature.default_difference")
+        self.assertEqual(finding.severity, "warning")
+        self.assertIn("instant_interrupt", finding.message)
+        self.assertIn("stage=under development", finding.message)
+        self.assertIn("official=false (default=false)", finding.message)
+        self.assertIn("internal=true (default=true)", finding.message)
+        self.assertEqual(result.synchronization_queue, ())
+
+    def test_default_difference_is_generic_and_symmetric(self):
+        for name in ("future_supported", "future.supported", "apps"):
+            for stage in ("stable", "experimental", "under development"):
+                for enabled in (False, True):
+                    with self.subTest(name=name, stage=stage, official=enabled):
+                        official = self.feature(name, enabled, stage=stage, default=enabled)
+                        internal = self.feature(name, not enabled, stage=stage, default=not enabled)
+                        result = self.evaluate([official], [internal])
+                        self.assertTrue(result.healthy, result.findings)
+                        self.assertIn("parity.feature.default_difference",
+                                      {item.code for item in result.findings})
+                        self.assertEqual(result.synchronization_queue, ())
+
+    def test_default_difference_does_not_accept_effective_overrides(self):
+        official = self.feature("instant_interrupt", False, default=False)
+        internal = self.feature("instant_interrupt", True, default=True)
+        for reference, candidate in (
+            (replace(official, effective_state=True), internal),
+            (official, replace(internal, effective_state=False)),
+            (replace(official, effective_state=True), replace(internal, effective_state=False)),
+        ):
+            with self.subTest(official=reference, internal=candidate):
+                result = self.evaluate([reference], [candidate])
+                self.assertFalse(result.healthy)
+                self.assertNotIn("parity.feature.default_difference",
+                                 {item.code for item in result.findings})
+
+    def test_default_difference_does_not_accept_missing_or_inactive_features(self):
+        official = self.feature("instant_interrupt", False, default=False)
+        internal = self.feature("instant_interrupt", True, default=True)
+        pairs = [([official], []), ([], [internal]),
+                 ([official], [replace(internal, stage="experimental")])]
+        for stage in ("removed", "deprecated"):
+            pairs.append(([replace(official, stage=stage)], [replace(internal, stage=stage)]))
+        for reference, candidate in pairs:
+            with self.subTest(official=reference, internal=candidate):
+                self.assertFalse(self.evaluate(reference, candidate).healthy)
+
+    def test_default_difference_preserves_required_and_specialized_checks(self):
+        official = self.feature("instant_interrupt", False, default=False)
+        internal = self.feature("instant_interrupt", True, default=True)
+        for options in ({"observed": (official.name,)},
+                        {"requested_internal_features": frozenset({official.name})}):
+            with self.subTest(options=options):
+                self.assertFalse(self.evaluate([official], [internal], **options).healthy)
+        for name in ("multi_agent_v2", "item_ids"):
+            with self.subTest(name=name):
+                result = self.evaluate([replace(official, name=name)], [replace(internal, name=name)])
+                self.assertFalse(result.healthy)
+                self.assertIn("parity.feature.core_drift", {item.code for item in result.findings})
+
+    def test_default_difference_does_not_expand_reviewed_feature_pairs(self):
+        for name in ("guardianv2.thread_context", "personality", "realtime_conversation", "worktrees"):
+            with self.subTest(name=name):
+                official = self.feature(name, True, default=True)
+                internal = self.feature(name, False, default=False)
+                result = self.evaluate([official], [internal])
+                self.assertFalse(result.healthy)
+                self.assertNotIn("parity.feature.default_difference",
+                                 {item.code for item in result.findings})
+
+    def test_default_warning_does_not_hide_protocol_failure(self):
+        official = self.feature("instant_interrupt", False, default=False)
+        internal = self.feature("instant_interrupt", True, default=True)
+        method = parity.ProtocolMethodRecord(direction="client_request",
+            method="turn/start", schema={"type": "object", "properties": {}})
+        result = self.evaluate([official], [internal], methods=((method,), ()))
+        self.assertFalse(result.healthy)
+        self.assertIn("parity.feature.default_difference", {item.code for item in result.findings})
+        self.assertIn("parity.protocol.core_missing", {item.code for item in result.findings})
+
     def test_supported_choice_does_not_allow_capability_or_core_drift(self):
         for name in ("apps", "guardian_approval", "prevent_idle_sleep"):
             official = self.feature(name, True)

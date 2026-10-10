@@ -1,5 +1,18 @@
 # Task Ledger
 
+## Current Task: Supported default differences (2026-10-10)
+
+- Reuse `allow-optional-setup-parity-differences`, tasks 9–13. Requester explicitly approved default differences and previously authorized self-test and the existing PR commit/push.
+- Owner: main. Baseline c0ebda44dea6; scope and public seams are in the current design follow-up.
+- Status: implementing; RED/GREEN, native/package checks and both review axes pending. No release/archive or caller-specific repository content.
+- Preserve existing unrelated untracked research. Duplicate newly created planning was folded into this existing unarchived change.
+
+### Default-difference incidental findings
+
+| ID | Classification | Evidence / resolution |
+|---|---|---|
+| DEFAULTS-NATIVE-FIXTURE-SIGNATURE | CONTINUE_WITH_MINIMAL_GUARD | Existing native fixture detaches the signed packaged CLI and gets exit -9 before parity. Re-sign only its owned copy; retain original App identity checks. |
+
 ## Current Task: Packaged Desktop CLI repair (2026-10-10)
 
 - Requester approved the concrete diagnosis/repair and commit/push to

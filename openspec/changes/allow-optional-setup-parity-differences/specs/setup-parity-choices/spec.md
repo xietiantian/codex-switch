@@ -12,7 +12,7 @@ The update SHALL preserve and permit differing enabled values of apps, guardian_
 - **THEN** the update reports the choices and continues remaining checks without rewriting them
 
 #### Scenario: Unsupported or required capability
-- **WHEN** a supported-choice feature is absent, changes stage/default, or is explicitly required by the core contract
+- **WHEN** a supported-choice feature is absent, changes stage, changes default without meeting the supported default-only rule, or is explicitly required by the core contract
 - **THEN** its incompatible difference remains blocking with a named diagnostic
 
 ### Requirement: Optional clock capability
@@ -70,3 +70,55 @@ When official reports system_proxy_fallback as stable with default true and inte
 #### Scenario: Required or changed retry definition
 - **WHEN** candidate enables the absent feature, the core contract requires it, or its definition/absence direction differs
 - **THEN** the difference remains blocking
+
+
+### Requirement: Supported default differences are nonblocking
+For a feature without a specialized capability/evidence rule, when both runtimes
+support it at the same active stage, defaults differ, and each effective value
+equals its own default, parity SHALL report a nonblocking default-difference
+warning. Active stages are stable, experimental and under development. The
+rule SHALL apply independently of the feature name, without rewriting either
+configuration or requesting synchronization of the accepted defaults. Independent
+supported-choice features may use this rule when their values follow defaults;
+features governed by exact reviewed pairs SHALL NOT use it when their pair changes.
+
+#### Scenario: Instant interruption uses different defaults
+- **WHEN** instant_interrupt is under development on both runtimes, official
+  defaults to and uses false, internal defaults to and uses true, and no core
+  dependency or explicit internal request requires it
+- **THEN** the difference is a warning and all other compatibility checks continue
+
+#### Scenario: Another feature reverses the defaults
+- **WHEN** another supported feature satisfies the same conditions with official
+  true and internal false
+- **THEN** it receives the same nonblocking classification without a name allowlist
+
+### Requirement: Existing compatibility boundaries remain enforced
+The new default rule SHALL NOT override specialized feature policies, observed
+dependencies, explicit internal feature requests, missing features, stage
+changes, removed or deprecated features, or effective values differing from
+their defaults. Protocol/configuration errors and native probe failures SHALL
+retain their existing blocking semantics.
+
+#### Scenario: Default-looking core dependency
+- **WHEN** a differing feature is core, observed, explicitly requested, or has
+  item-ID requirements governed by the specialized policy
+- **THEN** its existing dependency/evidence validation determines acceptance
+
+#### Scenario: Difference is not solely supported defaults
+- **WHEN** a runtime lacks the feature, stages differ or are inactive, or an
+  effective value differs from that runtime's isolated default
+- **THEN** the new default rule does not accept the difference
+
+#### Scenario: Protocol fails alongside a default warning
+- **WHEN** supported defaults differ but a core protocol method is incompatible
+- **THEN** parity reports the warning and still rejects the runtime update
+
+### Requirement: Diagnostics and receipts reflect the policy
+The warning SHALL identify the feature, development stage and both default and
+effective values. Policy identity SHALL change so old receipts cannot establish
+health without fresh validation under the new rule.
+
+#### Scenario: Fresh preparation after upgrade
+- **WHEN** an older-policy receipt exists and defaults now differ
+- **THEN** preparation uses the new policy and records the concrete warning

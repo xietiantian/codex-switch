@@ -79,6 +79,13 @@ class NativeStagedUpdateTests(unittest.TestCase):
             shutil.copy2(cls.original_backend, cls.candidate)
         cls.official = cls.assets / "desktop-cli"
         shutil.copy2(cls.original_official, cls.official)
+        if sys.platform == "darwin":
+            # A packaged App signature is not portable outside its bundle.
+            # Sign only the owned fixture copy; the installed App stays intact.
+            subprocess.run(
+                ["/usr/bin/codesign", "--force", "--sign", "-", str(cls.official)],
+                check=True, capture_output=True,
+            )
 
     @classmethod
     def tearDownClass(cls):

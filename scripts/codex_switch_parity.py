@@ -38,7 +38,7 @@ from codex_switch_runtime_binding import (
 )
 
 
-PARITY_POLICY_VERSION = "9"
+PARITY_POLICY_VERSION = "10"
 PARITY_RECEIPT_SCHEMA_VERSION = 2
 MAX_PARITY_RECEIPT_BYTES = 256 * 1024
 MAX_PARITY_CATALOG_BYTES = 16 * 1024 * 1024
@@ -10799,6 +10799,30 @@ def evaluate_parity_policy(
                         observed=drift,
                     )
                 )
+            continue
+        # Specialized capability/dependency rules above retain precedence.
+        if (
+            name not in _REVIEWED_FEATURE_PAIRS
+            and name not in observed_feature_names
+            and name not in requested_feature_names
+            and entry.official is not None
+            and entry.internal is not None
+            and entry.official.stage == entry.internal.stage
+            and entry.official.stage in {"stable", "experimental", "under development"}
+            and entry.official.isolated_default != entry.internal.isolated_default
+            and entry.official.effective_state == entry.official.isolated_default
+            and entry.internal.effective_state == entry.internal.isolated_default
+        ):
+            official_state = str(entry.official.effective_state).lower()
+            internal_state = str(entry.internal.effective_state).lower()
+            findings.append(ParityFinding(
+                category="feature", code="parity.feature.default_difference",
+                severity="warning",
+                message=(f"{name}: supported defaults differ (stage={entry.official.stage}); "
+                         f"official={official_state} (default={official_state}); "
+                         f"internal={internal_state} (default={internal_state})."),
+                expected="independent-supported-defaults", observed="default-difference",
+            ))
             continue
         findings.append(
             _policy_finding(

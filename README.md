@@ -110,9 +110,20 @@ reference reports stage `stable` and default `true`, for either effective value.
 It reports unavailable automatic system-proxy retry after eligible connection
 failures. Explicit candidate requests, core dependencies, changed definitions,
 and actual connection/configuration failures remain blocking. These rules were
-introduced in policy 7 and are retained by the current policy 9.
+introduced in policy 7 and are retained by the current policy 10.
 
-Malformed rows and unclassified feature differences still block promotion.
+Policy 10 also allows supported default-only differences without a feature-name
+allowlist: both runtimes must expose the same active stage (`stable`,
+`experimental` or `under development`), their defaults must differ, and each
+effective value must equal its own default. The `parity.feature.default_difference`
+warning includes both values and defaults; neither configuration is rewritten
+or queued for synchronization. Specialized feature rules retain precedence,
+including core and item-ID requirements. Observed dependencies, explicit
+internal feature requests, absent/inactive features, stage changes and effective
+overrides cannot use this default-only exception. Policy 9 receipts require
+fresh preparation. Protocol and native behavior checks remain required.
+
+Malformed rows and other unclassified feature differences still block promotion.
 Supported `apps`, `guardian_approval`, and `prevent_idle_sleep` choices may differ
 when stage/default metadata matches; actual CLI configuration and core checks
 still apply. Missing `nonfatal_clock_read_errors` is an optional capability
