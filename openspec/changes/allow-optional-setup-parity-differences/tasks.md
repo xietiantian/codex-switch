@@ -16,6 +16,6 @@ These follow-ups are now explicitly approved. Caller-specific implementation and
 
 - [x] 9. Reproduce current default-only rejection at the public policy seam and add generic classification with specialized-rule precedence.
 - [x] 10. Cover both default directions, active stages, overrides, missing/inactive features, required features and protocol failures; advance policy and document behavior.
-- [ ] 11. Run fresh broad, native and packaged verification, including old receipt invalidation.
+- [x] 11. Run fresh broad, native and packaged verification, including old receipt invalidation.
 - [x] 12. Complete independent Spec and Standards reviews and resolve findings.
-- [ ] 13. Commit, refresh the exact package, perform authorized current-runtime acceptance and push the existing PR branch; record final evidence.
+- [x] 13. Commit, refresh the exact package, perform authorized current-runtime acceptance and push the existing PR branch; record final evidence.

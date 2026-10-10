@@ -20,6 +20,31 @@ CLI outside its bundle (exit -9 during version probing, before policy). It now
 re-signs only the owned temporary copy and retains original runtime/App state
 checks. This is a test fixture correction, not a production signing change.
 
-Final discovery, profile, native and exact-package verification are pending.
+Final checks pass as recorded below.
 The superseded discovery run, which includes the 3 fixed failures, is retained
 as partial historical evidence. Its completion is not claimed.
+
+## Final default-difference verification and delivery
+
+Implementation: 6afbfded6575a1694191780ab12e2ce1d041eab7, pushed to the
+existing fix/standalone-installer-runtime PR fork branch; remote SHA read back.
+
+- Final complete discovery: 1,303 tests, OK with 14 conditional skips
+  (1247.424 seconds). The skipped cases were explicitly executed: 12 native
+  core/typed-v2/staged tests (151.173 seconds), 1 native lifecycle test
+  (50.028 seconds), and 1 Python 3.9 transaction test (0.193 seconds), all pass.
+- Explicit profile suite: 227 passed (400.278 seconds).
+- Exact committed package upgrades an isolated policy-9 installation to policy
+  10; 44 installed tests pass (39.814 seconds). Manifests validate after tests,
+  with no bytecode residue. Archive SHA-256:
+  fa646f3e0c79a2ffcdfb82894d30c891fd6095b455f3314e099dbbf6b10ee53a.
+- Actual Desktop 26.1007.21159 / CLI 0.162.0-alpha.17.2 and internal 0.162.1
+  complete activation with default-difference warning, healthy managed launcher
+  and provider-backed CLI execution. The original Desktop binary stays intact.
+  Caller orchestration/configuration and private logs remain outside this repo.
+- Strict OpenSpec, shell syntax, diff checks and both independent reviews pass.
+  No unresolved findings, release publication, archive or caller-specific code.
+
+Superseded failing/partial runs remain diagnostic evidence, not final acceptance.
+The duplicate draft change was removed before implementation; all work remains
+in this existing unarchived change.

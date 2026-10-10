@@ -2,7 +2,7 @@
 
 ## Current default-difference follow-up
 
-Requester approved supported default differences, self-test and existing PR delivery. Baseline c0ebda44dea6. Reuse this unarchived change, tasks 9–13. The duplicate draft was folded back before implementation. Verification is pending; previous pass counts do not establish acceptance for policy 10.
+Requester approved supported default differences, self-test and existing PR delivery. Baseline c0ebda44dea6. Reuse this unarchived change, tasks 9–13. The duplicate draft was folded back before implementation. Final policy-10 acceptance and delivery are recorded below; historical counts remain historical.
 
 ## Historical policy-7 authority
 
@@ -32,5 +32,29 @@ Standards: no violations or required maintenance findings. Spec: one issue was
 found where a nonmatching reviewed pair could enter the generic rule; exclusion
 of reviewed feature names and four public negative cases resolve it. Both axes
 rechecked the correction and owned-copy native signing repair with zero open
-findings. Fresh public setup/current regression passes 20 tests. Broad/native
-and exact package acceptance are still in progress; no completion claim yet.
+findings. Fresh public setup/current regression passes 20 tests. Final broad/native and exact-package acceptance are recorded below.
+
+## Final default-difference verification and delivery
+
+Implementation: 6afbfded6575a1694191780ab12e2ce1d041eab7, pushed to the
+existing fix/standalone-installer-runtime PR fork branch; remote SHA read back.
+
+- Final complete discovery: 1,303 tests, OK with 14 conditional skips
+  (1247.424 seconds). The skipped cases were explicitly executed: 12 native
+  core/typed-v2/staged tests (151.173 seconds), 1 native lifecycle test
+  (50.028 seconds), and 1 Python 3.9 transaction test (0.193 seconds), all pass.
+- Explicit profile suite: 227 passed (400.278 seconds).
+- Exact committed package upgrades an isolated policy-9 installation to policy
+  10; 44 installed tests pass (39.814 seconds). Manifests validate after tests,
+  with no bytecode residue. Archive SHA-256:
+  fa646f3e0c79a2ffcdfb82894d30c891fd6095b455f3314e099dbbf6b10ee53a.
+- Actual Desktop 26.1007.21159 / CLI 0.162.0-alpha.17.2 and internal 0.162.1
+  complete activation with default-difference warning, healthy managed launcher
+  and provider-backed CLI execution. The original Desktop binary stays intact.
+  Caller orchestration/configuration and private logs remain outside this repo.
+- Strict OpenSpec, shell syntax, diff checks and both independent reviews pass.
+  No unresolved findings, release publication, archive or caller-specific code.
+
+Superseded failing/partial runs remain diagnostic evidence, not final acceptance.
+The duplicate draft change was removed before implementation; all work remains
+in this existing unarchived change.

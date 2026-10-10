@@ -4,7 +4,7 @@
 
 - Reuse `allow-optional-setup-parity-differences`, tasks 9–13. Requester explicitly approved default differences and previously authorized self-test and the existing PR commit/push.
 - Owner: main. Baseline c0ebda44dea6; scope and public seams are in the current design follow-up.
-- Status: implementing; RED/GREEN, native/package checks and both review axes pending. No release/archive or caller-specific repository content.
+- Status: verified and delivered as 6afbfded6575. Complete discovery 1,303 (14 conditional cases all explicitly covered), profile 227, installed 44 and native/interpreter checks pass. Both review axes closed. Evidence: `.planning/verification/feature-default-differences-20261010.md`. No release/archive or caller-specific content.
 - Preserve existing unrelated untracked research. Duplicate newly created planning was folded into this existing unarchived change.
 
 ### Default-difference incidental findings

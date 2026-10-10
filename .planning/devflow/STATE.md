@@ -1,11 +1,11 @@
 ---
 workflow_version: 0.4.0
 project_mode: brownfield
-current_stage: implementation
+current_stage: verification
 
 current_change:
   id: allow-optional-setup-parity-differences
-  status: implementing
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -30,8 +30,8 @@ gates:
   spec_approved: true
   plan_written: true
   tests_baseline_known: true
-  implementation_done: false
-  verification_passed: false
+  implementation_done: true
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,8 +41,8 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-10-10-packaged-desktop-cli
-  last_checkpoint_file: .planning/verification/packaged-desktop-cli-20261010.md
+  last_checkpoint_id: 2026-10-10-feature-default-differences
+  last_checkpoint_file: .planning/verification/feature-default-differences-20261010.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
@@ -79,16 +79,16 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: approved_packaged_desktop_repair_and_existing_pr_push
+  last_decision: approved_supported_default_differences_and_existing_pr_push
   last_goal_status: aligned
-  goal_summary: Complete approved packaged Desktop repair, policy 9 verification and existing PR push.
+  goal_summary: Completed supported-default classification, policy 10 verification and existing PR push.
 ---
 
 # Workflow State
 
 ## Current default-difference follow-up
 
-Use the existing allow-optional-setup-parity-differences tasks 9–13. Supported defaults use a generic warning; specialized, explicit-dependency and protocol checks retain precedence. Baseline c0ebda44dea6, implementation/verification in progress. Existing PR push and exact package refresh remain authorized; release/archive are excluded.
+Use the existing allow-optional-setup-parity-differences tasks 9–13. Supported defaults use a generic warning; specialized, explicit-dependency and protocol checks retain precedence. Implementation 6afbfded6575 is verified and pushed; tasks 9–13 are complete. Final discovery, explicit conditional tests, installed package and current-runtime acceptance pass. Evidence: .planning/verification/feature-default-differences-20261010.md. Release/archive remain excluded.
 
 ## Current packaged Desktop repair
 
