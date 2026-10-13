@@ -4,8 +4,8 @@ project_mode: brownfield
 current_stage: verification
 
 current_change:
-  id: allow-optional-setup-parity-differences
-  status: verified
+  id: filter-app-server-process-diagnostics
+  status: verifying
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: true
+  verification_passed: false
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -41,13 +41,13 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-10-10-feature-default-differences
-  last_checkpoint_file: .planning/verification/feature-default-differences-20261010.md
+  last_checkpoint_id: 2026-10-13-independent-cli-processes
+  last_checkpoint_file: .planning/verification/independent-cli-processes-20261013.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
   compact_source: openspec
-  compact_updated_at: 2026-10-10
+  compact_updated_at: 2026-10-13
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
   compact_after:
@@ -79,12 +79,16 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: approved_supported_default_differences_and_existing_pr_push
+  last_decision: approved_independent_cli_process_repair_and_existing_pr_push
   last_goal_status: aligned
-  goal_summary: Completed supported-default classification, policy 10 verification and existing PR push.
+  goal_summary: Exclude confirmed independent CLI children while preserving Desktop and ambiguous process diagnostics.
 ---
 
 # Workflow State
+
+## Current process attribution follow-up
+
+Use existing `filter-app-server-process-diagnostics` tasks 4–7. Diagnosis and scope are approved; main owns implementation, tests, reviews and existing PR delivery. Evidence: `.planning/verification/independent-cli-processes-20261013.md`.
 
 ## Current default-difference follow-up
 

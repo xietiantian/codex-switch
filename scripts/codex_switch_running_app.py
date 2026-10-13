@@ -5,7 +5,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Sequence
 
 from codex_switch_constants import APP_CLI_ENV, DEFAULT_LAUNCH_AGENT_LABEL
 from codex_switch_io import run_quiet
@@ -109,20 +109,19 @@ def parse_env_app_cli_path(output: str) -> str:
     return match.group(1) if match else ""
 
 
-def argv_invokes_app_server(args: Sequence[str]) -> bool:
+def _codex_subcommand(args: Sequence[str]) -> str | None:
+    """Return the command, empty for the TUI, or None for unrecognized syntax."""
     index = 0
     while index < len(args):
         token = args[index]
-        if token == "app-server":
-            return True
         if token == "--":
-            return False
+            return ""
         if token in GLOBAL_FLAG_OPTIONS:
             index += 1
             continue
         if token in GLOBAL_OPTIONS_WITH_VALUE:
             if index + 1 >= len(args):
-                return False
+                return None
             index += 2
             continue
         if token.startswith("--") and "=" in token:
@@ -133,8 +132,12 @@ def argv_invokes_app_server(args: Sequence[str]) -> bool:
         if token.startswith("-c") and token != "-c":
             index += 1
             continue
-        return False
-    return False
+        return None if token.startswith("-") else token
+    return ""
+
+
+def argv_invokes_app_server(args: Sequence[str]) -> bool:
+    return _codex_subcommand(args) == "app-server"
 
 
 def app_server_command_path(args: str) -> str:
@@ -183,6 +186,70 @@ def _desktop_host_for_command(
     return ("", "")
 
 
+def _invokes_app_proxy(tokens: Sequence[str]) -> bool | None:
+    """Recognize the script position; unknown Python syntax remains ambiguous."""
+    if Path(tokens[0]).name == APP_PROXY_MARKER:
+        return True
+    if not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(tokens[0]).name.lower()):
+        return False
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--":
+            index += 1
+            break
+        if not token.startswith("-"):
+            break
+        if token.startswith(("-c", "-m")):
+            return None
+        if token in {"-W", "-X"}:
+            if index + 1 >= len(tokens):
+                return None
+            index += 2
+        elif token.startswith(("-W", "-X")) or re.fullmatch(r"-[bBdEiIOPqRsSuvVx]+", token):
+            index += 1
+        else:
+            return None
+    if index == len(tokens):
+        return None
+    return Path(tokens[index]).name == APP_PROXY_MARKER
+
+
+def _has_independent_cli_ancestry(
+    pid: int,
+    processes: Mapping[int, tuple[int, str]],
+    inventory: DesktopInventory,
+) -> bool:
+    """Exclude only proven CLI children; ambiguous or Desktop chains stay visible."""
+    seen: set[int] = set()
+    cli_ancestor = False
+    while pid > 1:
+        if pid in seen or pid not in processes:
+            return False
+        seen.add(pid)
+        ppid, args = processes[pid]
+        try:
+            tokens = shlex.split(args)
+        except ValueError:
+            return False
+        if not tokens:
+            return False
+        if _desktop_host_for_command(args, inventory)[0] or _invokes_app_proxy(tokens) is not False:
+            return False
+        command_name = Path(tokens[0]).name
+        if command_name == "codex":
+            subcommand = _codex_subcommand(tokens[1:])
+            if subcommand is None:
+                return False
+            if subcommand != "app-server":
+                # Positional text also starts the TUI: codex [OPTIONS] [PROMPT].
+                cli_ancestor = True
+        elif command_name.startswith("codex-"):
+            return False
+        pid = ppid
+    return cli_ancestor
+
+
 def running_codex_processes(
     inventory: DesktopInventory | None = None,
     process_output: str | None = None,
@@ -201,6 +268,7 @@ def running_codex_processes(
     observations: list[RunningCodexProcess] = []
     processes = parse_ps_process_tree(output)
     command_by_pid = {pid: args for pid, _ppid, args in processes}
+    ancestry = {pid: (ppid, args) for pid, ppid, args in processes}
     for pid, ppid, args in processes:
         desktop_path, host_kind = _desktop_host_for_command(args, inventory)
         if desktop_path:
@@ -225,6 +293,8 @@ def running_codex_processes(
         except ValueError:
             continue
         if LISTEN_ARG in parsed_args and PRIMARY_APP_SERVER_ARG not in parsed_args:
+            continue
+        if _has_independent_cli_ancestry(ppid, ancestry, inventory):
             continue
         observations.append(
             RunningCodexProcess(

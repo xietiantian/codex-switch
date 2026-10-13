@@ -1,5 +1,12 @@
 # Task Ledger
 
+## Current Task: Independent CLI process attribution (2026-10-13)
+
+- Reuse `filter-app-server-process-diagnostics`, tasks 4–7; main owns the bounded collector/test/docs write set in its design.
+- User approved the diagnosed repair, commit and existing PR push. Baseline d7efb37724e1.
+- Status: source verified; final runtime/verify 138 and installed 28 tests pass, both review axes closed. Exact-commit consumer acceptance and push remain.
+- Evidence: `.planning/verification/independent-cli-processes-20261013.md`. Preserve unrelated research; no caller-specific content, release, archive or process restart.
+
 ## Current Task: Supported default differences (2026-10-10)
 
 - Reuse `allow-optional-setup-parity-differences`, tasks 9–13. Requester explicitly approved default differences and previously authorized self-test and the existing PR commit/push.

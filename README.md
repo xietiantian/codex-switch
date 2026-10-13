@@ -382,6 +382,13 @@ core-drift, probe-failed, or unclassified evidence reports
 healthy unless its policy escalates it and appears separately as a
 deterministically ordered `Parity sync:` queue.
 
+Desktop process diagnostics exclude app-server children whose complete process
+ancestry identifies an independent Codex CLI. CLI daemons can use the same flags
+and inherit the same environment as Desktop; neither establishes Desktop
+ownership. Recognized Desktop or managed proxy ancestry takes precedence, and
+unknown or incomplete ancestry retains diagnostics. Real Desktop backend/proxy
+mismatches still fail verification; independent terminal sessions need not stop.
+
 Receipt schema v2 binds sorted direction/method coverage, the exact adapter
 rule used for transformed paths, deterministic optional-extension identifiers,
 and the versioned official Desktop acceptance trace. Schema-v1 receipts cannot

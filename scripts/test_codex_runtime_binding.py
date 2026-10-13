@@ -1678,6 +1678,31 @@ class RuntimeBindingTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(app_server_command_path(command), "")
 
+    def test_terminal_cli_daemons_do_not_fail_desktop_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _store, backend, launcher, binding = self.write_internal_store_fixture(root)
+            daemon = root / "packages" / "app-server-daemon" / "bin" / "codex"
+            observation = collect_runtime_observation(
+                inventory=DesktopInventory(current=None),
+                process_output=(
+                    "100 1 /bin/zsh\n"
+                    f"101 100 {backend} --model example\n"
+                    f"102 101 {daemon} app-server --listen unix:///tmp/codex.sock "
+                    "--analytics-default-enabled\n"
+                    f"103 101 {daemon} app-server daemon\n"
+                ),
+                env_reader=lambda _pid: str(launcher),
+                gui_app_cli=str(launcher),
+                launch_agent_cli=str(launcher),
+                managed_launcher=launcher,
+            )
+
+            attestation = attest_runtime_binding(binding, observation)
+
+            self.assertTrue(attestation.healthy, attestation.findings)
+            self.assertEqual((), observation.processes)
+
     def test_running_desktop_uses_host_executable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1699,6 +1724,192 @@ class RuntimeBindingTests(unittest.TestCase):
             self.assertEqual(observations[0].kind, "desktop")
             self.assertEqual(observations[0].command_path, str(main))
             self.assertEqual(observations[0].host_kind, "chatgpt")
+
+    def test_nested_terminal_cli_daemons_are_excluded(self) -> None:
+        observation = collect_runtime_observation(
+            inventory=DesktopInventory(current=None),
+            process_output=(
+                "104 103 /opt/daemon/codex app-server daemon\n"
+                "103 102 /opt/daemon/codex app-server\n"
+                "102 101 /usr/bin/helper\n"
+                "101 100 /opt/bin/codex --config model=example resume\n"
+                "100 1 /bin/zsh\n"
+            ),
+            env_reader=lambda _pid: "",
+        )
+
+        self.assertEqual((), observation.processes)
+
+    def test_desktop_ancestry_preserves_real_backend_and_proxy_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _store, _backend, launcher, binding = self.write_internal_store_fixture(root)
+            roots = self.make_roots(root)
+            main, _cli = self.write_bundle(
+                roots.chatgpt, bundle_id=CURRENT_CHATGPT_BUNDLE_ID, main_name="ChatGPT"
+            )
+            observation = collect_runtime_observation(
+                inventory=discover_desktop_hosts(roots),
+                process_output=(
+                    f"100 1 {main}\n"
+                    "101 100 /opt/bin/codex\n"
+                    "102 101 /opt/stale/codex app-server --analytics-default-enabled\n"
+                ),
+                env_reader=lambda _pid: str(launcher),
+                gui_app_cli=str(launcher),
+                launch_agent_cli=str(launcher),
+                managed_launcher=launcher,
+            )
+
+            self.assertEqual([100, 102], [p.pid for p in observation.processes])
+            self.assertEqual(
+                {"attestation.app_server.backend_mismatch", "attestation.internal.proxy_bypass"},
+                {f.code for f in attest_runtime_binding(binding, observation).findings},
+            )
+
+    def test_managed_proxy_ancestry_takes_precedence_over_terminal_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _store, backend, launcher, binding = self.write_internal_store_fixture(root)
+            observation = collect_runtime_observation(
+                inventory=DesktopInventory(current=None),
+                process_output=(
+                    "100 1 /bin/zsh\n"
+                    "101 100 /opt/bin/codex\n"
+                    "102 101 /usr/bin/python3 -B /opt/switch/codex_switch_app_proxy.py\n"
+                    f"103 102 {backend} app-server\n"
+                ),
+                env_reader=lambda _pid: str(launcher),
+                gui_app_cli=str(launcher),
+                launch_agent_cli=str(launcher),
+                managed_launcher=launcher,
+            )
+
+            self.assertEqual([103], [p.pid for p in observation.processes])
+            self.assertTrue(attest_runtime_binding(binding, observation).healthy)
+
+    def test_ambiguous_app_server_ancestry_remains_visible(self) -> None:
+        for parents in (
+            "",  # Missing immediate parent.
+            "101 100 /opt/bin/codex\n",  # CLI owner, but missing its parent.
+            "101 100 /opt/bin/codex\n100 101 /bin/zsh\n",  # Cycle.
+            "101 100 /opt/bin/codex\n100 1 /bin/zsh 'unterminated\n",
+            "101 100 /opt/bin/codex\n100 1 /opt/bin/codex --model\n",
+            "101 1 /usr/bin/unknown-host\n",  # No positive CLI attribution.
+            "101 1 /usr/bin/helper 'codex app-server'\n",  # Payload, not CLI owner.
+        ):
+            with self.subTest(parents=parents):
+                observation = collect_runtime_observation(
+                    inventory=DesktopInventory(current=None),
+                    process_output=parents + "102 101 /opt/backend/codex app-server daemon\n",
+                    env_reader=lambda _pid: "",
+                )
+
+                self.assertEqual([102], [p.pid for p in observation.processes])
+
+    def test_proxy_filename_in_cli_prompt_does_not_change_ownership(self) -> None:
+        observation = collect_runtime_observation(
+            inventory=DesktopInventory(current=None),
+            process_output=(
+                "100 1 /bin/zsh\n"
+                '101 100 /opt/bin/codex exec "debug codex_switch_app_proxy.py"\n'
+                "102 101 /opt/backend/codex app-server daemon\n"
+            ),
+            env_reader=lambda _pid: "",
+        )
+
+        self.assertEqual((), observation.processes)
+
+    def test_python_proxy_options_and_unknown_invocations_remain_visible(self) -> None:
+        for command in (
+            "/usr/bin/python3 -IB /opt/switch/codex_switch_app_proxy.py",
+            "/usr/bin/python3 -W ignore -X dev /opt/switch/codex_switch_app_proxy.py",
+            "/usr/bin/python3 -Wignore -Xdev -- /opt/switch/codex_switch_app_proxy.py",
+            "/usr/bin/python3 --future-option /opt/switch/codex_switch_app_proxy.py",
+            "/usr/bin/python3 -W",
+            "/usr/bin/python3 -c",
+            "/usr/bin/python3 -m",
+            "/usr/bin/python3 -m codex_switch_app_proxy",
+        ):
+            with self.subTest(command=command):
+                observation = collect_runtime_observation(
+                    inventory=DesktopInventory(current=None),
+                    process_output=(
+                        "100 1 /opt/bin/codex\n"
+                        f"101 100 {command}\n"
+                        "102 101 /opt/backend/codex app-server daemon\n"
+                    ),
+                    env_reader=lambda _pid: "",
+                )
+
+                self.assertEqual([102], [p.pid for p in observation.processes])
+
+    def test_unrecognized_cli_ancestor_commands_remain_visible(self) -> None:
+        for command in (
+            "/opt/bin/codex --future-global-option value app-server",
+            "/opt/bin/codex --model",
+            "/opt/bin/codex --config",
+            "/opt/bin/codex-unknown-host",
+        ):
+            with self.subTest(command=command):
+                observation = collect_runtime_observation(
+                    inventory=DesktopInventory(current=None),
+                    process_output=(
+                        "100 1 /bin/zsh\n"
+                        f"101 100 {command}\n"
+                        "102 101 /opt/backend/codex app-server daemon\n"
+                    ),
+                    env_reader=lambda _pid: "",
+                )
+
+                self.assertEqual([102], [p.pid for p in observation.processes])
+
+    def test_terminal_cli_initial_prompts_do_not_fail_desktop_observation(self) -> None:
+        for command in (
+            "/opt/bin/codex --dangerously-bypass-approvals-and-sandbox Explain this failing test",
+            "/opt/bin/codex hello",
+            '/opt/bin/codex -- "app-server"',
+        ):
+            with self.subTest(command=command):
+                observation = collect_runtime_observation(
+                    inventory=DesktopInventory(current=None),
+                    process_output=(
+                        "100 1 /bin/zsh\n"
+                        f"101 100 {command}\n"
+                        "102 101 /opt/backend/codex app-server daemon\n"
+                    ),
+                    env_reader=lambda _pid: "",
+                )
+
+                self.assertEqual((), observation.processes)
+
+    def test_terminal_cli_and_desktop_backends_are_attributed_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            roots = self.make_roots(root)
+            main, cli = self.write_bundle(
+                roots.chatgpt, bundle_id=CURRENT_CHATGPT_BUNDLE_ID, main_name="ChatGPT"
+            )
+            inventory = discover_desktop_hosts(roots)
+            binding = resolve_runtime_binding(
+                self.make_context(root, "openai-official", {}), inventory
+            )
+            observation = collect_runtime_observation(
+                inventory=inventory,
+                process_output=(
+                    "100 1 /bin/zsh\n"
+                    "101 100 /opt/bin/codex\n"
+                    "102 101 /opt/daemon/codex app-server daemon\n"
+                    f"200 1 {main}\n"
+                    f"201 200 {cli} app-server --analytics-default-enabled\n"
+                ),
+                env_reader=lambda _pid: str(cli),
+                gui_app_cli=str(cli),
+                launch_agent_cli=str(cli),
+            )
+
+            self.assertEqual([200, 201], [p.pid for p in observation.processes])
+            self.assertTrue(attest_runtime_binding(binding, observation).healthy)
 
     def test_attestation_accepts_official_direct_chain(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
