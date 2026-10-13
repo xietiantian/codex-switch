@@ -408,6 +408,14 @@ def config_uses_file_auth(config_text: str) -> bool:
     return value == "file"
 
 
+def config_requires_openai_auth(config_text: str) -> bool:
+    """Match the provider credential contract used by staged binding apply."""
+    data = ConfigDocument.parse(config_text, "runtime authentication config").data
+    providers = data.get("model_providers", {})
+    provider = providers.get(data.get("model_provider"), {}) if isinstance(providers, dict) else {}
+    return isinstance(provider, dict) and provider.get("requires_openai_auth") is True
+
+
 def build_shared_config_text(
     base_config_path: Path,
     profile_name: str,

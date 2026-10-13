@@ -1,5 +1,12 @@
 # Task Ledger
 
+## Current Task: Three PR review fixes (2026-10-13)
+
+- User explicitly opts out of OpenSpec and authorizes fixing the reviewed auth, backup and status defects plus existing PR push.
+- Main owns bounded source/tests and evidence; preserve the verified setup flow and unrelated research.
+- Contract/validation: `.planning/verification/pr1-review-fixes-20261013.md`.
+- Status: three repairs and bounded review complete; affected 494, Profile 227, native lifecycle 3 and final auth 4 tests pass (one existing conditional skip). Exact-package/full consumer acceptance and PR delivery follow.
+
 ## Current Task: Archive completed PR changes (2026-10-13)
 
 - Scope: four changes introduced by PR #1 and the existing process-diagnostics change continued by the PR; all five have 60 completed tasks.

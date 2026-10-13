@@ -341,6 +341,12 @@ def internal_app_bound(store):
     return False
 
 
+def require_no_recovery_backup(target):
+    if os.path.lexists(target.with_name(".codex-internal-backup")):
+        raise UpdateError("Unresolved backup prevents profileless installation or adoption",
+                          reason="recovery_required")
+
+
 def require_bootstrap_target(store, target):
     raw = file_state(store.root / ".internal-cli-bootstrap.json", payload=True)
     state = file_state(target)
@@ -354,8 +360,6 @@ def require_bootstrap_target(store, target):
             raise ValueError()
     except (ValueError, KeyError, TypeError) as exc:
         raise UpdateError("Bootstrap runtime identity changed; repair or capture the existing CLI") from exc
-    if os.path.lexists(target.with_name(".codex-internal-backup")):
-        raise UpdateError("Unresolved backup prevents profileless runtime adoption")
 
 
 def run_installer(command):
@@ -388,8 +392,10 @@ def stage(args, store):
     if not args.current and (not args.version or parse_semantic_version(args.version) is None):
         raise UpdateError("Stage requires an exact semantic --version or --current", exit_code=2)
     require_no_pending(store)
-    if not store.manifest_path("internal").exists() and os.path.lexists(target):
-        require_bootstrap_target(store, target)
+    if not store.manifest_path("internal").exists():
+        require_no_recovery_backup(target)
+        if os.path.lexists(target):
+            require_bootstrap_target(store, target)
     if args.current and not os.path.lexists(target):
         raise UpdateError("--current requires an installed internal runtime")
     create_directory(store.root)
@@ -454,6 +460,15 @@ def status(args, store):
     terminal = terminal_result(store, record)
     if terminal is not None:
         return public_record(terminal)
+    if record["state"] == "staged":
+        # Observe candidate bytes only. Mutable home/config changes do not make
+        # status an apply preflight, and confirmed terminal results win above.
+        try:
+            if runtime_identity(Path(record["runtime_path"])) != record["runtime_identity"]:
+                raise UpdateError("Candidate runtime changed after stage", reason="stale")
+        except (UpdateError, OSError) as exc:
+            record = dict(record, state="stale", reason="stale",
+                          message=f"Candidate runtime is no longer valid; stage again: {exc}")
     if record["state"] in {"staging", "applying"}:
         try:
             with record_lock(root):
@@ -540,6 +555,8 @@ def source_inputs(store, source_home, *, committed_input=None):
 def require_frozen(store, record, source_home=None, expected_inputs=None):
     target, candidate = Path(record["target_path"]), Path(record["runtime_path"])
     require_no_pending(store)
+    if record.get("profile_present") is False:
+        require_no_recovery_backup(target)
     if runtime_identity(candidate) != record["runtime_identity"]:
         raise UpdateError("Candidate runtime changed after stage", reason="stale")
     if context_snapshot(store, target) != record["snapshot"]:

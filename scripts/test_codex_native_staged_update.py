@@ -355,6 +355,36 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         self.assertNotIn("notify", runtime)
         self.assertFalse(self.marker.exists())
 
+    def test_file_auth_apply_and_switch_preserve_refreshed_runtime_credentials(self):
+        self.config = self.config.replace("requires_openai_auth=false", "requires_openai_auth=true")
+        self.config = self.config.replace('cli_auth_credentials_store="file"',
+            'cli_auth_credentials_store="file" # local credentials')
+        (self.final_home / "config.toml").write_text(self.config)
+        source_auth = b'{"OPENAI_API_KEY":"sk-private-native-fixture"}'
+        (self.final_home / "auth.json").write_bytes(source_auth)
+        official_auth = self.official_home / "auth.json"
+        official_auth.write_bytes(b'{"OPENAI_API_KEY":"sk-official-native-fixture"}')
+        official_before = official_auth.read_bytes()
+        staged, store = self.stage()
+        applied, _ = self.command("apply", staged["update_id"],
+            "--from-codex-home", str(self.final_home), "--json")
+        self.assertEqual(applied["state"], "applied")
+        runtime_auth = self.internal_home / "auth.json"
+        self.assertEqual(runtime_auth.read_bytes(), source_auth)
+        self.assertEqual((store.profile_dir("internal") / "auth.json").read_bytes(), source_auth)
+        refreshed = b'{"OPENAI_API_KEY":"sk-refreshed-native-fixture"}'
+        runtime_auth.write_bytes(refreshed)
+        (self.home / "Library/LaunchAgents").mkdir(parents=True, exist_ok=True)
+        for _ in range(2):
+            switched = self.profile_command("switch", "internal", "--skip-launchctl")
+            self.assertEqual(switched.returncode, 0, switched.stdout + switched.stderr)
+            self.assertEqual(runtime_auth.read_bytes(), refreshed)
+            self.assertEqual(official_auth.read_bytes(), official_before)
+        verified = self.profile_command("verify", "internal", "--app-server-smoke")
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+        self.assertGreaterEqual(len(self.requests), 4)
+        self.assertFalse(self.marker.exists())
+
     def test_real_default_catalog_export_preserves_compatibility_guard(self):
         from codex_switch_verify import collect_parity_report
         from codex_switch_parity import ParityValidationError

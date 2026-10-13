@@ -53,6 +53,28 @@ class StagedUpdateTests(unittest.TestCase):
         self.assertEqual(status.returncode, 0, status.stderr)
         self.assertEqual(json.loads(status.stdout)["state"], "staged")
 
+    def test_first_stage_refuses_existing_recovery_backup_before_allocation(self):
+        backup = self.target.with_name(".codex-internal-backup")
+        for kind in ("file", "dangling-link", "directory"):
+            with self.subTest(kind=kind):
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                if kind == "file":
+                    backup.write_text("recoverable-runtime")
+                elif kind == "dangling-link":
+                    backup.symlink_to(self.root / "absent-recovery-runtime")
+                else:
+                    backup.mkdir()
+                result = self.stage()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("backup", result.stdout + result.stderr)
+                self.assertFalse(self.target.exists())
+                self.assertFalse((self.store / "updates").exists())
+                self.assertTrue(os.path.lexists(backup))
+                if kind == "directory":
+                    backup.rmdir()
+                else:
+                    backup.unlink()
+
     def test_current_bootstrap_runtime_without_profile_does_not_reinstall(self):
         bootstrap = self.run_install()
         self.assertEqual(bootstrap.returncode, 0, bootstrap.stderr)
@@ -107,6 +129,39 @@ class StagedUpdateTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["state"], "stale")
         self.assertIn("user-owned", self.target.read_text())
         self.assertFalse((self.store / "profiles/internal").exists())
+
+    def test_status_reports_candidate_drift_without_writing_or_executing_it(self):
+        result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        record = json.loads(result.stdout)
+        path = self.store / "updates" / record["update_id"] / "record.json"
+        before = path.read_bytes()
+        candidate = Path(record["runtime_path"])
+        marker = self.root / "candidate-was-executed"
+        candidate.write_text('#!/bin/sh\ntouch "' + str(marker) + '"\n')
+        observed = self.command("status", record["update_id"], "--json")
+        self.assertEqual(observed.returncode, 0, observed.stdout + observed.stderr)
+        status = json.loads(observed.stdout)
+        self.assertEqual(status["state"], "stale")
+        self.assertIn("candidate", status["message"].lower())
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse(marker.exists())
+        self.assertFalse(self.target.exists())
+        candidate.unlink()
+        missing = self.command("status", record["update_id"], "--json")
+        self.assertEqual(json.loads(missing.stdout)["state"], "stale")
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_status_ignores_mutable_home_config_and_hooks(self):
+        record = json.loads(self.stage().stdout)
+        path = self.store / "updates" / record["update_id"] / "record.json"
+        before = path.read_bytes()
+        self.write(self.home / ".codex/config.toml", '[hooks.state.test]\ntrusted_hash="updated"\n')
+        self.write(self.home / ".codex/hooks.json", '{"hooks":{}}')
+        observed = self.command("status", record["update_id"], "--json")
+        self.assertEqual(observed.returncode, 0, observed.stdout + observed.stderr)
+        self.assertEqual(json.loads(observed.stdout)["state"], "staged")
+        self.assertEqual(path.read_bytes(), before)
 
     def test_record_tamper_does_not_allow_cancel_to_touch_paths(self):
         record = json.loads(self.stage().stdout)
@@ -341,7 +396,7 @@ class StagedEngineIntegrationTests(unittest.TestCase):
     """Native transaction/handshake integration; parity policy has its own suite."""
 
     @contextmanager
-    def prepared_update(self, *, staged=False, first=False):
+    def prepared_update(self, *, staged=False, first=False, recovery_backup=False):
         import codex_switch_update as update
         import codex_switch_bindings as bindings
         import test_codex_runtime_binding as fixture_module
@@ -381,6 +436,8 @@ class StagedEngineIntegrationTests(unittest.TestCase):
                 store.profile_dir("internal").rmdir()
                 store.active_path.unlink()
                 (store.bin_dir / "codex-internal-app").unlink()
+            if recovery_backup:
+                target.with_name(".codex-internal-backup").write_text("prior-recovery-runtime")
             def prepared(candidate, **_kwargs):
                 result = fixture.bind_staged_capability_receipt(bundle, candidate)
                 runtime = Path(record["runtime_path"])
@@ -452,6 +509,38 @@ class StagedEngineIntegrationTests(unittest.TestCase):
             self.assertEqual(result["state"], "applied")
             self.assertTrue(store.manifest_path("internal").is_file())
             self.assertEqual(Path(record["runtime_path"]).read_bytes(), Path(args.internal_bin).read_bytes())
+
+    def test_existing_profile_stage_keeps_its_existing_backup_contract(self):
+        with self.prepared_update(recovery_backup=True) as (update, store, args, record, _prepare):
+            self.assertEqual(record["state"], "staged")
+            self.assertTrue(record["profile_present"])
+            self.assertEqual(update.status(args, store)["state"], "staged")
+
+    def test_first_apply_rejects_new_or_pre_fix_recovery_backup(self):
+        for legacy_record in (False, True):
+            with self.subTest(legacy_record=legacy_record), self.prepared_update(staged=True, first=True) as (update, store, args, record, _prepare):
+                backup = Path(args.internal_bin).with_name(".codex-internal-backup")
+                backup.write_text("prior-recovery-runtime")
+                if legacy_record:
+                    # Older stage accepted and froze an already-present backup.
+                    path = store.root / "updates" / args.update_id / "record.json"
+                    saved = update.read_record(path)
+                    saved["snapshot"]["backup"] = update.file_state(backup)
+                    update.atomic_json(path, saved)
+                with self.assertRaisesRegex(update.UpdateError, "backup"):
+                    update.apply_update(args, store)
+                self.assertFalse(store.profile_dir("internal").exists())
+                self.assertFalse(Path(args.internal_bin).exists())
+                self.assertEqual(backup.read_text(), "prior-recovery-runtime")
+
+    def test_committed_status_does_not_revalidate_retained_candidate(self):
+        with self.prepared_update(staged=True, first=True) as (update, store, args, record, _prepare):
+            applied = update.apply_update(args, store)
+            candidate = Path(record["runtime_path"])
+            candidate.write_bytes(candidate.read_bytes() + b"\n# changed after commit\n")
+            status = update.status(args, store)
+            self.assertEqual(status["state"], "applied")
+            self.assertEqual(status["transaction_id"], applied["transaction_id"])
 
     def test_source_drift_during_preparation_is_refused_without_publication(self):
         with self.prepared_update() as (update, store, args, record, prepare):

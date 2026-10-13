@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import io
 import json
+from itertools import product
 import multiprocessing
 import os
 import plistlib
@@ -3068,6 +3069,59 @@ class TransactionTests(unittest.TestCase):
                 '{"official":"auth"}\n',
                 (store.official_codex_home / "auth.json").read_text(),
             )
+
+    def test_shared_internal_file_auth_survives_switch_without_cross_profile_copy(self):
+        from codex_switch_transaction import TransactionRequest, execute_transaction
+
+        variants = (
+            'cli_auth_credentials_store="file"',
+            'cli_auth_credentials_store="file" # local credentials',
+            '"cli_auth_credentials_store"="file"',
+            'cli_auth_credentials_store="auto"',
+            '',
+        )
+        cases = (
+            ('{"token":"refreshed"}', '{"token":"saved"}', True, '{"token":"refreshed"}'),
+            (None, '{"token":"saved"}', True, '{"token":"saved"}'),
+            (None, None, True, None),
+            ('{"token":"stale"}', '{"token":"saved"}', False, None),
+        )
+        for storage, (runtime_auth, profile_auth, requires_auth, expected) in product(variants, cases):
+            with self.subTest(storage=storage, runtime_auth=runtime_auth, requires_auth=requires_auth), tempfile.TemporaryDirectory() as temp:
+                store, _, _, _ = self.arrange_switch_effect_fixture(Path(temp))
+                profile = store.profile_dir("internal")
+                (profile / "config.toml").write_text(
+                    'model="internal-after"\nmodel_provider="internal-provider"\n'
+                    + storage + '\n'
+                    + '[model_providers.internal-provider]\n'
+                    'base_url="https://provider.example/v1"\nwire_api="responses"\n'
+                    'requires_openai_auth=' + str(requires_auth).lower() + '\n'
+                    + ('' if requires_auth else 'env_key="INTERNAL_TEST_KEY"\n')
+                )
+                (store.internal_codex_home / "config.toml").write_bytes(
+                    (profile / "config.toml").read_bytes()
+                )
+                for path, payload in ((profile / "auth.json", profile_auth),
+                                      (store.internal_codex_home / "auth.json", runtime_auth)):
+                    if payload is None:
+                        path.unlink()
+                    else:
+                        path.write_text(payload)
+                official_auth = store.official_codex_home / "auth.json"
+                official_before = official_auth.read_bytes()
+                request = TransactionRequest(operation="switch", profile="internal", options={
+                    "config_mode": "shared", "skip_shim": True,
+                    "skip_app_cli": True, "skip_launchctl": True,
+                })
+                for _ in range(2):
+                    result = execute_transaction(store, request)
+                    self.assertEqual(result.outcome, "committed")
+                    active_auth = store.internal_codex_home / "auth.json"
+                    if expected is None:
+                        self.assertFalse(active_auth.exists())
+                    else:
+                        self.assertEqual(active_auth.read_text(), expected)
+                    self.assertEqual(official_auth.read_bytes(), official_before)
 
     def test_shared_official_switch_preserves_existing_config_and_auth_contract(
         self,

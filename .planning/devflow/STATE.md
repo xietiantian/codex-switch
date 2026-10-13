@@ -4,8 +4,8 @@ project_mode: brownfield
 current_stage: verification
 
 current_change:
-  id: filter-app-server-process-diagnostics
-  status: archived
+  id: pr1-review-fixes-20261013
+  status: source_verified
 
 standing_milestone:
   status: inactive
@@ -41,12 +41,12 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-10-13-pr-change-archive
-  last_checkpoint_file: .planning/verification/archive-completed-changes-20261013.md
+  last_checkpoint_id: 2026-10-13-pr-review-fixes
+  last_checkpoint_file: .planning/verification/pr1-review-fixes-20261013.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
-  compact_source: openspec
+  compact_source: lightweight_ledger_user_opt_out
   compact_updated_at: 2026-10-13
   compact_skip_reason: bounded_change_context_is_healthy
   compact_error: none
@@ -72,7 +72,7 @@ goal_gate:
   id: none
   required: false
   status: durable_contract
-  reason: bounded authorized source repair uses current OpenSpec tasks and evidence; no runtime goal requested
+  reason: user explicitly opts out of OpenSpec; bounded repair uses durable ledger and evidence; no runtime goal requested
   suggested_goal: none
 
 context_health:
@@ -85,6 +85,14 @@ context_health:
 ---
 
 # Workflow State
+
+## Current PR review repairs
+
+User explicitly opts out of OpenSpec for the three reviewed auth/backup/status
+defects and authorizes existing PR commit/push. Source regression and bounded
+independent review are complete; exact-package/full consumer acceptance and
+delivery follow. No OpenSpec artifacts are modified. Evidence:
+`.planning/verification/pr1-review-fixes-20261013.md`.
 
 ## Current PR-only archive
 

@@ -13975,6 +13975,7 @@ def _execute_switch(
     from codex_switch_config import (
         build_base_config_text,
         build_profile_v2_config_text,
+        config_requires_openai_auth,
         config_uses_file_auth,
         merge_missing_non_usage_shared_config_defaults,
         merge_preserved_shared_config_blocks,
@@ -14405,8 +14406,12 @@ def _execute_switch(
         if parity_projection is not None:
 
             validate_prepared_parity_config(store, parity_projection, target_config_text.encode())
-        writes_auth = False
-        removes_auth = True
+        # Full apply can publish provider-owned file credentials. Keep runtime
+        # refreshes, and restore only this profile's credentials when absent.
+        # A file storage preference alone does not make env-auth profiles use it.
+        requires_auth = config_requires_openai_auth(target_config_text)
+        writes_auth = requires_auth and auth_path.exists() and not target_auth_path.exists()
+        removes_auth = not requires_auth
     elif config_mode == "shared":
         merged_official_config = build_official_home_config_from_internal(
             homes.official.path,
