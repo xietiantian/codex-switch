@@ -26,7 +26,7 @@ package installation; refresh the existing consumer test entry to the committed
 build and execute full setup plus installed verification. Consumer-specific
 commands and output remain in the consumer repository's local artifacts.
 
-Status: source repair and bounded review complete; package/live acceptance and PR delivery pending. Preserve unrelated untracked research.
+Status: all source, package, native and consumer acceptance passed; ready for the authorized existing PR push. Preserve unrelated untracked research.
 
 ## Bounded review contract
 
@@ -51,10 +51,10 @@ repeat the entire prior PR review or run live commands.
 - Status RED reported staged after candidate modification; GREEN checks changed
   and missing candidates without execution/journal writes, mutable home settings,
   committed results and interrupted terminal recovery.
-- Affected suites: 494 tests, exit 0, one existing conditional skip. Profile:
+- Affected suites: 494 tests, exit 0, one existing Python 3.9 interpreter-conditional skip on the Python 3.14 host. Profile:
   227 tests, exit 0. Native first apply, released binding lifecycle and file auth:
   3 tests, exit 0; the final semantic-auth native case was repeated in the 4-test
-  final GREEN above. Update/Release remains running at this checkpoint.
+  final GREEN above. Update/Release subsequently passed all 200 tests.
 - Python 3.9 grammar for all six changed Python modules and git diff --check pass.
 - Bounded independent Standards/Spec review initially found a lexical TOML gate;
   provider authentication now uses semantic TOML parsing consistent with private
@@ -64,3 +64,33 @@ repeat the entire prior PR review or run live commands.
 
 No OpenSpec artifacts changed. No installer, feature/parity policy, Desktop
 reference, mutable setup ownership or caller recipe behavior changed.
+
+## Final acceptance and delivery
+
+Implementation commit: `d25b00c2283c35ad550505098a1ce4b7c259f1a4`.
+
+- Source totals: affected 494 (one existing interpreter-conditional skip), Profile
+  227 and Update/Release 200; all exit 0. Final semantic-auth regression 4 and
+  native lifecycle 3 pass; these overlap the above tests where applicable.
+- Installed the exact committed release archive into an isolated prefix.
+  Eleven selected auth/backup/status/current-adoption/terminal/native tests pass,
+  using the installed production modules and CLI paths. Package manifests remain
+  valid and unchanged; no bytecode files were created.
+- The existing consumer entrypoint was refreshed to that exact committed
+  package, then executed on the real HOME with `--non-interactive`, no additional
+  skip flags and no CLI version pin: exit 0 in 61.39 seconds. Setup publication
+  reached complete with runtime ownership; native App initialization/plugin-list
+  and CLI exec smoke passed. Installed verify (repair=none), doctor and status
+  all exit 0. Installed production files match the tested release payload.
+- Desktop binary unchanged; no Desktop restart or unrelated process termination.
+  Consumer commands, configuration backups and raw logs stay in the consumer's
+  private local artifact root; no caller business content is added here.
+- Follow-up evidence changes affect no runtime payload. Refresh the consumer
+  entrypoint to the final PR head and verify the rebuilt archive is byte-identical
+  to the fully tested implementation archive before the authorized push.
+
+All three review defects are closed. Shared authentication ownership, valid
+bootstrap adoption, existing-profile updates and runtime-owned mutable setup
+files have explicit regression coverage. This validation establishes the tested
+paths and current environment; it does not assert that all possible future
+external CLI/Desktop releases are compatible.

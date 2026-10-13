@@ -5,7 +5,7 @@ current_stage: verification
 
 current_change:
   id: pr1-review-fixes-20261013
-  status: source_verified
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -33,7 +33,7 @@ gates:
   implementation_done: true
   verification_passed: true
   state_updated: true
-  archive_allowed: true
+  archive_allowed: false
   release_allowed: false
 
 implementation_readiness:
@@ -79,9 +79,9 @@ context_health:
   last_report: .planning/context-health/reports/20260629130742-context-health.json
   last_risk: medium
   last_confidence: medium
-  last_decision: approved_independent_cli_process_repair_and_existing_pr_push
+  last_decision: approved_three_pr_review_fixes_without_openspec_and_existing_pr_push
   last_goal_status: aligned
-  goal_summary: Exclude confirmed independent CLI children while preserving Desktop and ambiguous process diagnostics.
+  goal_summary: Preserve internal credentials, reject profileless recovery conflicts and report staged candidate drift without disturbing the existing setup flow.
 ---
 
 # Workflow State
@@ -89,9 +89,11 @@ context_health:
 ## Current PR review repairs
 
 User explicitly opts out of OpenSpec for the three reviewed auth/backup/status
-defects and authorizes existing PR commit/push. Source regression and bounded
-independent review are complete; exact-package/full consumer acceptance and
-delivery follow. No OpenSpec artifacts are modified. Evidence:
+defects and authorizes existing PR commit/push. Implementation d25b00c passes
+source regression, bounded independent review, installed tests and full real
+consumer setup (61.39s, exit 0), plus installed verify/doctor/status. Final
+evidence head preserves the tested runtime payload; authorized delivery follows.
+No OpenSpec artifacts are modified. Evidence:
 `.planning/verification/pr1-review-fixes-20261013.md`.
 
 ## Current PR-only archive

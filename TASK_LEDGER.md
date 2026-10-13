@@ -5,7 +5,7 @@
 - User explicitly opts out of OpenSpec and authorizes fixing the reviewed auth, backup and status defects plus existing PR push.
 - Main owns bounded source/tests and evidence; preserve the verified setup flow and unrelated research.
 - Contract/validation: `.planning/verification/pr1-review-fixes-20261013.md`.
-- Status: three repairs and bounded review complete; affected 494, Profile 227, native lifecycle 3 and final auth 4 tests pass (one existing conditional skip). Exact-package/full consumer acceptance and PR delivery follow.
+- Status: implementation d25b00c verified; affected 494 (one existing interpreter skip), Profile 227, Update/Release 200, final auth 4, native lifecycle 3 and installed 11 pass. Full consumer setup passes in 61.39s; installed verify/doctor/status pass. Both review axes are closed. Evidence-only final head retains the tested payload; authorized existing PR push follows.
 
 ## Current Task: Archive completed PR changes (2026-10-13)
 
