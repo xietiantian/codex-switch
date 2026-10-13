@@ -1,5 +1,13 @@
 # Task Ledger
 
+## Current Task: Archive completed PR changes (2026-10-13)
+
+- Scope: four changes introduced by PR #1 and the existing process-diagnostics change continued by the PR; all five have 60 completed tasks.
+- Owner main; user authorized archive and existing PR commit/push. No new change or runtime edits.
+- The initial 17 unrelated mainline archives and their spec sync were reversed after PR-base reconciliation. All 19 remaining active trees are unchanged.
+- Main specs synchronized; five archives moved. Strict validation 30/30, exact spec/artifact preservation and scope checks pass; authorized PR delivery follows.
+- Evidence and review contracts: `.planning/verification/archive-completed-changes-20261013.md`.
+
 ## Current Task: Independent CLI process attribution (2026-10-13)
 
 - Reuse `filter-app-server-process-diagnostics`, tasks 4–7; main owns the bounded collector/test/docs write set in its design.
@@ -25,7 +33,7 @@
 
 - Requester approved the concrete diagnosis/repair and commit/push to
   `fix/standalone-installer-runtime`. No caller-specific business content.
-- Queue: `openspec/changes/support-packaged-desktop-cli/tasks.md`; scope,
+- Queue: `openspec/changes/archive/2026-10-13-support-packaged-desktop-cli/tasks.md`; scope,
   ownership, test seams and rollback in that change's design.
 - Baseline: `42af1e820db9`. Preserve existing untracked research/artifacts.
 - Status: verified and delivered as a490786e5a9c to the existing PR fork branch.
@@ -62,7 +70,7 @@
 ## Active Change: Optional runtime parity differences
 
 - Scope: approved feature/protocol exceptions and bounded apply/status/replay diagnostics; preserve core, unknown and removed-feature checks.
-- Canonical task queue: openspec/changes/allow-optional-setup-parity-differences/tasks.md.
+- Canonical task queue: openspec/changes/archive/2026-10-13-allow-optional-setup-parity-differences/tasks.md.
 - Current approval: implement the reviewed system_proxy_fallback absence classification, policy 7 and startup-budget adjustments in two protocol tests.
 - Caller-specific workflows, configuration generation, authentication guidance and integration records are outside this repository.
 - Status: approved implementation verified: 187 regression cases, 6 repeated timing cases and 17 installed runtime cases pass; manifests, strict OpenSpec and diff checks pass. Spec review documentation corrections applied. No live installation or Git publication.
@@ -73,7 +81,7 @@
   private final-home capture and parity, transactional full/first apply, durable
   recovery/idempotence, source identity across managed recapture and preserved
   one-shot/strict bootstrap behavior. Baseline `956197209b2d`.
-- Canonical execution source: `openspec/changes/support-staged-internal-update/tasks.md`.
+- Canonical execution source: `openspec/changes/archive/2026-10-13-support-staged-internal-update/tasks.md`.
   This ledger records authority/history, not a duplicate task queue.
 - Native design and three delta specs contain Target State, completion/Goal
   contract, bounded write set, slices, tests, rollback and automatic continuation.
@@ -3454,7 +3462,7 @@ git diff --check
 
 ## Approved runtime configuration launch repair (2026-09-29)
 
-Execution source: `openspec/changes/revalidate-runtime-config-at-launch/tasks.md`. Root owns generic runtime, evidence, launcher synchronization and public verification; no dependent caller content or live effects. Previous optional work retained.
+Execution source: `openspec/changes/archive/2026-10-13-revalidate-runtime-config-at-launch/tasks.md`. Root owns generic runtime, evidence, launcher synchronization and public verification; no dependent caller content or live effects. Previous optional work retained.
 
 Runtime launch incidental finding: `DEFER_AND_CONTINUE` — newer Desktop packaging and runtime inventories require an independent version-adaptation decision; requester explicitly excluded that follow-up from this repair. The approved compatibility-input repair remains independently verifiable with its original reference version. Do not broaden feature/protocol policy or Desktop discovery in this change.
 

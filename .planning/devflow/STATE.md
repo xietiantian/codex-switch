@@ -5,7 +5,7 @@ current_stage: verification
 
 current_change:
   id: filter-app-server-process-diagnostics
-  status: verified
+  status: archived
 
 standing_milestone:
   status: inactive
@@ -33,7 +33,7 @@ gates:
   implementation_done: true
   verification_passed: true
   state_updated: true
-  archive_allowed: false
+  archive_allowed: true
   release_allowed: false
 
 implementation_readiness:
@@ -41,8 +41,8 @@ implementation_readiness:
 
 context_management:
   compact_policy: checkpoint_boundary
-  last_checkpoint_id: 2026-10-13-independent-cli-processes
-  last_checkpoint_file: .planning/verification/independent-cli-processes-20261013.md
+  last_checkpoint_id: 2026-10-13-pr-change-archive
+  last_checkpoint_file: .planning/verification/archive-completed-changes-20261013.md
   compact_recommended: false
   compact_status: not_needed
   last_compact_result_file: none
@@ -85,6 +85,19 @@ context_health:
 ---
 
 # Workflow State
+
+## Current PR-only archive
+
+The requester authorizes archiving completed changes in PR #1 and continuing
+the existing branch commit/push. Four PR-added changes and the PR-continued
+process-diagnostics change are archived under `2026-10-13-*` with all 60 tasks
+complete. Main specs are synchronized; final strict validation passes 30/30,
+and spec/artifact preservation, scope and navigation checks pass.
+The initial 17 unchanged mainline candidates were restored in full after scope
+correction. All 19 remaining active mainline changes retain their baseline
+state. Five earlier PR archives remain unchanged. This authorization supersedes
+only the historical archive exclusions for the five selected PR changes below.
+Evidence: `.planning/verification/archive-completed-changes-20261013.md`.
 
 ## Current process attribution follow-up
 
