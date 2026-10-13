@@ -41,3 +41,12 @@ handling follows the current CLI help grammar, not a guessed subcommand list.
 
 Final source/package checks are recorded in the linked verification record.
 Main owns the remaining exact-commit acceptance and delivery.
+
+## Final recovery checkpoint
+
+Implementation 937bb05f3ff2 is committed/pushed on the original PR branch.
+Exact archive equals the installed tested package. Original full consumer
+setup exits0 (62.7s), journal complete; subsequent installed verify/doctor/status
+all exit0. No live daemon was stopped. The final document-only update records
+acceptance and repairs the existing default-difference requirement formatting;
+whole-repo strict validation is now31/31. Runtime code is unchanged.

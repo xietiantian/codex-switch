@@ -5,7 +5,7 @@ current_stage: verification
 
 current_change:
   id: filter-app-server-process-diagnostics
-  status: verifying
+  status: verified
 
 standing_milestone:
   status: inactive
@@ -31,7 +31,7 @@ gates:
   plan_written: true
   tests_baseline_known: true
   implementation_done: true
-  verification_passed: false
+  verification_passed: true
   state_updated: true
   archive_allowed: false
   release_allowed: false
@@ -88,7 +88,7 @@ context_health:
 
 ## Current process attribution follow-up
 
-Use existing `filter-app-server-process-diagnostics` tasks 4–7. Diagnosis and scope are approved; main owns implementation, tests, reviews and existing PR delivery. Evidence: `.planning/verification/independent-cli-processes-20261013.md`.
+Use existing `filter-app-server-process-diagnostics` tasks 4–7. Tasks are complete. Implementation 937bb05f3ff2 is verified and pushed; full consumer setup and installed verify/doctor/status pass. Main owns the final evidence-only follow-up. Evidence: `.planning/verification/independent-cli-processes-20261013.md`.
 
 ## Current default-difference follow-up
 

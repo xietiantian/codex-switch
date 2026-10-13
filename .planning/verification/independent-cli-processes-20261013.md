@@ -26,11 +26,34 @@ ambiguity, and ordinary TUI initial prompts. Unknown ancestry remains visible.
 - Source current-machine verify also exits 0. Source doctor sees only the expected
   source-directory versus installed immutable shim-directory mismatch. Baseline
   installed doctor reproduces the two original attestation errors, with no shim
-  mismatch. Final installed doctor acceptance is pending the normal setup path.
+  mismatch. The normal setup path subsequently regenerated the installed shim and passed
+  installed doctor, verify and status (all exit 0).
 - Strict change validation, shell syntax, AST, diff checks and independent Spec
   and Standards reviews pass. Generated evidence is retained with no auto cleanup.
 - Tested archive SHA-256:
   `7266812d8057fe302cfd495b0a4ac38defbf54dcb9add5044fde3cf1b8fa1c35`.
 
-Next: commit the tested source, package the exact commit, run authorized consumer
-acceptance using that package and push the existing PR branch. No release/archive.
+## Exact-commit acceptance and delivery
+
+Implementation `937bb05f3ff23c2a031934c060d8b8705cabc3f2` is committed and
+pushed to the existing `fix/standalone-installer-runtime` PR fork branch.
+Packaging the exact commit reproduced the tested archive digest above.
+
+The original consumer setup entry was updated to this exact package and run in
+full with only `--non-interactive`: 62.7 seconds, exit 0. The update journal is
+complete with runtime ownership handed off. The actual managed App launcher
+handshake and provider-backed `codex exec` smoke passed. Internal CLI remains
+0.162.1; no CLI version lock was added. The installed Desktop binary was unchanged
+and existing terminal CLI daemon processes were not stopped. Fresh installed
+`verify internal --repair=none`, `doctor`, and `status` all exit 0. Status still
+reports the pre-existing caller PATH order advisory; it is not an attestation
+failure. Caller-specific orchestration, private backups and logs stay outside
+this repository.
+
+The broader OpenSpec sweep initially found an existing default-difference
+requirement paragraph extraction error (SHALL on a continuation line). A
+format-only sentence reflow fixes it without changing policy. All 31 items now
+pass strict validation. This is the only incidental scope addition.
+
+Final tracked follow-up records this evidence and the paragraph format correction;
+runtime/package content remains identical. No release publication or archive.

@@ -73,10 +73,11 @@ When official reports system_proxy_fallback as stable with default true and inte
 
 
 ### Requirement: Supported default differences are nonblocking
-For a feature without a specialized capability/evidence rule, when both runtimes
-support it at the same active stage, defaults differ, and each effective value
-equals its own default, parity SHALL report a nonblocking default-difference
-warning. Active stages are stable, experimental and under development. The
+
+Parity SHALL report a nonblocking default-difference warning for a feature
+without a specialized capability/evidence rule when both runtimes support it at
+the same active stage, defaults differ, and each effective value equals its own
+default. Active stages are stable, experimental and under development. The
 rule SHALL apply independently of the feature name, without rewriting either
 configuration or requesting synchronization of the accepted defaults. Independent
 supported-choice features may use this rule when their values follow defaults;

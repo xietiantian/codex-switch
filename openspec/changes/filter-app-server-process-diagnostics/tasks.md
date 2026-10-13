@@ -12,8 +12,8 @@
 
 - [x] 4. Reproduce the terminal CLI daemon failure through public observation and attestation; implement conservative ancestry filtering.
 - [x] 5. Cover Desktop/proxy precedence, inherited environment, nested children, incomplete/cyclic/unknown ancestry and unchanged real failure checks; document diagnostics.
-- [ ] 6. Run affected regression suites, package/current-machine verification and source/spec reviews; record exact evidence.
-- [ ] 7. Commit and push the existing PR branch and verify its remote head.
+- [x] 6. Run affected regression suites, package/current-machine verification and source/spec reviews; record exact evidence.
+- [x] 7. Commit and push the existing PR branch and verify its remote head.
 
 ### Original validation commands
 

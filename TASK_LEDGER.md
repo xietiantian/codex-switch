@@ -4,8 +4,9 @@
 
 - Reuse `filter-app-server-process-diagnostics`, tasks 4–7; main owns the bounded collector/test/docs write set in its design.
 - User approved the diagnosed repair, commit and existing PR push. Baseline d7efb37724e1.
-- Status: source verified; final runtime/verify 138 and installed 28 tests pass, both review axes closed. Exact-commit consumer acceptance and push remain.
+- Status: verified and delivered as 937bb05f3ff2. Final runtime/verify 138, installed 28, original full consumer setup (62.7s exit0), installed verify/doctor/status, both review axes and all31 strict OpenSpec items pass.
 - Evidence: `.planning/verification/independent-cli-processes-20261013.md`. Preserve unrelated research; no caller-specific content, release, archive or process restart.
+- Incidental PROCESS-SPEC-PARAGRAPH: CONTINUE_WITH_MINIMAL_GUARD. Existing default-difference spec failed whole-repo strict validation because its required SHALL was on a continuation line; reflow the same requirement sentence only. All31 items pass.
 
 ## Current Task: Supported default differences (2026-10-10)
 
